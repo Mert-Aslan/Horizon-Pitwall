@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
+psutil==7.0.0
+playwright==1.65.2  # tools/ui_smoke.py + webapp-testing skill; then: python -m playwright install chromium

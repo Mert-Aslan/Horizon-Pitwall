@@ -1,0 +1,79 @@
+[
+  {
+    "file": "valid_324_driving.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "plausible driving values, 4th gear, 6100/8000 rpm",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_zero_speed.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "measured zero speed (must stay 0, not missing)",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_gear0.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "gear code 0 (R/N encoding unverified)",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_nan_rpm.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "NaN rpm -> rpm and rpm_fraction invalid",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_inf_speed.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "+Inf speed -> speed invalid",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_steer_min.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "steer -128, outside documented -127..127",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "valid_324_tail_ff.bin",
+    "length": 324,
+    "expected": "accepted",
+    "description": "non-zero undocumented trailing byte",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "reject_323.bin",
+    "length": 323,
+    "expected": "length_323_undocumented",
+    "description": "fields only, no trailing byte",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "reject_232.bin",
+    "length": 232,
+    "expected": "too_short",
+    "description": "truncated (FM7 'sled' length)",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "reject_0.bin",
+    "length": 0,
+    "expected": "too_short",
+    "description": "empty datagram",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  },
+  {
+    "file": "reject_400.bin",
+    "length": 400,
+    "expected": "unexpected_length",
+    "description": "oversized",
+    "origin": "synthetic (tools/make_fixtures.py)"
+  }
+]

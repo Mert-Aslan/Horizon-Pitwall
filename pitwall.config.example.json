@@ -1,0 +1,12 @@
+{
+  "udp_host": "127.0.0.1",
+  "udp_port": 5607,
+  "web_host": "127.0.0.1",
+  "web_port": 8080,
+  "lan": false,
+  "lan_allow_control": false,
+  "extra_allowed_hosts": [],
+  "stale_after_ms": 750,
+  "ui_rate_hz": 30,
+  "raw_rate_hz": 4
+}
