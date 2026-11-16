@@ -1,10 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { DASH, fmt } from "../format";
-import { GAP_S, sampleAt, speedAxisMax, type Sample, type SpeedScale } from "../history";
+import { GAP_S, sampleAt, speedAxisMax, type Ring, type Sample, type SpeedScale } from "../history";
 import { usePref } from "../prefs";
 import { store } from "../stream";
 
 export const WINDOW_S = 20;
+
+/** Where the chart's samples and clock come from. Live: the WebSocket store, clock =
+ *  browser arrival time. Replay: a ReplayPlayer, clock = recording seconds at the
+ *  playhead. Both use the same drawing, cursor and readout. */
+export interface TraceSource {
+  kind: "live" | "replay";
+  history: Ring;
+  now(): number;
+  subscribe(fn: () => void): () => void;
+}
+
+const LIVE_SOURCE: TraceSource = {
+  kind: "live",
+  history: store.history,
+  now: () => performance.now() / 1000,
+  subscribe: store.subscribe,
+};
 const TICKS = [-20, -15, -10, -5, 0];
 const SCALE_PREFS = ["auto", "200", "300", "400"] as const;
 type ScalePref = (typeof SCALE_PREFS)[number];
@@ -89,6 +106,7 @@ interface View {
   samples: () => Iterable<Sample>;
   now: number;
   speedMax: number;
+  nowLabel?: string;
 }
 
 function draw(ctx: CanvasRenderingContext2D, w: number, h: number, pal: Palette, view: View, cursorOffset: number | null, cursorSample: Sample | null) {
@@ -112,7 +130,7 @@ function draw(ctx: CanvasRenderingContext2D, w: number, h: number, pal: Palette,
     ctx.moveTo(px, PAD_T);
     ctx.lineTo(px, axisY - 6);
     ctx.stroke();
-    const label = tick === 0 ? "now" : `${tick} s`;
+    const label = tick === 0 ? (view.nowLabel ?? "now") : `${tick} s`;
     ctx.textAlign = tick === 0 ? "right" : tick === -WINDOW_S ? "left" : "center";
     ctx.fillText(label.replace("-", "−"), px, axisY);
   }
@@ -207,11 +225,11 @@ interface Frozen {
 const READOUT_KEYS = ["time", "speed", "rpm", "throttle", "brake", "steer"] as const;
 type ReadoutKey = (typeof READOUT_KEYS)[number];
 
-function readoutValues(offset: number, s: Sample | null): Record<ReadoutKey, string> {
+function readoutValues(offset: number, s: Sample | null, nowLabel = "now"): Record<ReadoutKey, string> {
   const p = (v: number | null) => (v === null ? DASH : `${fmt(v * 100)}%`);
   const steer = s?.steer ?? null;
   return {
-    time: offset > -0.05 ? "now" : `${fmt(offset, 1).replace("-", "−")} s`,
+    time: offset > -0.05 ? nowLabel : `${fmt(offset, 1).replace("-", "−")} s`,
     speed: s ? `${fmt(s.speed)} km/h` : "no data",
     rpm: s ? fmt(s.rpm) : DASH,
     throttle: s ? p(s.throttle) : DASH,
@@ -220,8 +238,8 @@ function readoutValues(offset: number, s: Sample | null): Record<ReadoutKey, str
   };
 }
 
-function valueText(offset: number, s: Sample | null): string {
-  const r = readoutValues(offset, s);
+function valueText(offset: number, s: Sample | null, nowLabel = "now"): string {
+  const r = readoutValues(offset, s, nowLabel);
   if (!s) return `${r.time}: no data at this moment`;
   return `${r.time}: speed ${r.speed}, throttle ${r.throttle}, brake ${r.brake}, steering ${r.steer}, ${r.rpm} rpm`;
 }
@@ -229,7 +247,11 @@ function valueText(offset: number, s: Sample | null): string {
 /** Last 20 s of speed, pedals and steering. Drawing is driven by store updates and
  *  resize events, not by React renders; a shared cursor inspects one moment and the
  *  view can be paused (a copy of the window is kept) while data keeps arriving. */
-export function Traces({ live }: { live: boolean }) {
+export function Traces({ live, source = LIVE_SOURCE }: { live: boolean; source?: TraceSource }) {
+  const replay = source.kind === "replay";
+  const nowLabel = replay ? "playhead" : "now";
+  const srcRef = useRef(source);
+  srcRef.current = source;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const valueRefs = useRef<Partial<Record<ReadoutKey, HTMLElement | null>>>({});
   const [scalePref, setScalePref] = usePref<ScalePref>("speedScale", SCALE_PREFS, "auto");
@@ -263,15 +285,20 @@ export function Traces({ live }: { live: boolean }) {
 
     const currentView = (): View => {
       const s = st.current;
+      const src = srcRef.current;
+      const nowLabel = src.kind === "replay" ? "playhead" : "now";
       if (s.frozen) {
         const f = s.frozen;
-        return { samples: () => f.samples, now: f.now, speedMax: f.speedMax };
+        return { samples: () => f.samples, now: f.now, speedMax: f.speedMax, nowLabel };
       }
-      // While not live the time axis is anchored, so stale data does not drift away.
-      let now = performance.now() / 1000;
-      if (!s.live) now = s.staleNow ??= now;
-      else s.staleNow = null;
-      return { samples: () => store.history.since(now - WINDOW_S - 1), now, speedMax: speedAxisMax(store.history.peakSpeed, s.scale) };
+      // Live: while not receiving the time axis is anchored, so stale data does not
+      // drift away. Replay: the axis always follows the playhead (paused or not).
+      let now = src.now();
+      if (src.kind === "live") {
+        if (!s.live) now = s.staleNow ??= now;
+        else s.staleNow = null;
+      }
+      return { samples: () => src.history.since(now - WINDOW_S - 1), now, speedMax: speedAxisMax(src.history.peakSpeed, s.scale), nowLabel };
     };
 
     const render = () => {
@@ -281,9 +308,10 @@ export function Traces({ live }: { live: boolean }) {
       const dpr = (window.devicePixelRatio || 1) * zoomK;
       const bw = Math.round(size.w * dpr);
       const bh = Math.round(size.h * dpr);
-      const key = `${bw}x${bh}:${s.cursor}:${!!s.frozen}:${s.live}:${s.scale}`;
+      const src = srcRef.current;
+      const key = `${bw}x${bh}:${s.cursor}:${!!s.frozen}:${s.live}:${s.scale}:${src.kind === "replay" ? src.now().toFixed(3) : ""}`;
       // Skip when nothing that affects the picture changed (stale / paused / idle).
-      if (!s.live && !s.frozen && key === drawnKey && store.history.version === drawnVersion) return;
+      if (!s.live && !s.frozen && key === drawnKey && src.history.version === drawnVersion) return;
       if (s.frozen && key === drawnKey) return;
       if (canvas.width !== bw || canvas.height !== bh) {
         canvas.width = bw;
@@ -294,12 +322,12 @@ export function Traces({ live }: { live: boolean }) {
       let cs: Sample | null = null;
       if (s.cursor !== null) {
         const t = view.now + s.cursor;
-        const win = s.frozen ? s.frozen.samples : store.history.snapshot(t - 1, t + 1);
+        const win = s.frozen ? s.frozen.samples : src.history.snapshot(t - 1, t + 1);
         cs = sampleAt(win, t);
         updateReadout(s.cursor, cs);
       }
       draw(ctx, size.w, size.h, pal, view, s.cursor, cs);
-      drawnVersion = store.history.version;
+      drawnVersion = src.history.version;
       drawnKey = key;
     };
 
@@ -310,7 +338,7 @@ export function Traces({ live }: { live: boolean }) {
     st.current.request = request;
 
     const updateReadout = (offset: number, s: Sample | null) => {
-      const vals = readoutValues(offset, s);
+      const vals = readoutValues(offset, s, srcRef.current.kind === "replay" ? "playhead" : "now");
       for (const k of READOUT_KEYS) {
         const el = valueRefs.current[k];
         if (el && el.textContent !== vals[k]) el.textContent = vals[k];
@@ -326,7 +354,7 @@ export function Traces({ live }: { live: boolean }) {
       request();
     });
     ro.observe(canvas);
-    const unsub = store.subscribe(() => {
+    const unsub = srcRef.current.subscribe(() => {
       if (!st.current.frozen) request();
     });
     const onVis = () => {
@@ -365,16 +393,17 @@ export function Traces({ live }: { live: boolean }) {
     st.current.request();
     if (announce && o !== null) {
       // computed after the redraw has picked the sample
-      requestAnimationFrame(() => setAriaText(valueText(o, st.current.lastSample)));
+      requestAnimationFrame(() => setAriaText(valueText(o, st.current.lastSample, nowLabel)));
     }
   };
 
   const pause = () => {
-    const now = performance.now() / 1000;
+    if (replay) return; // replay has its own transport; the chart follows the playhead
+    const now = source.now();
     setFrozen({
       now,
-      samples: store.history.snapshot(now - WINDOW_S - 1, now),
-      speedMax: speedAxisMax(store.history.peakSpeed, st.current.scale),
+      samples: source.history.snapshot(now - WINDOW_S - 1, now),
+      speedMax: speedAxisMax(source.history.peakSpeed, st.current.scale),
     });
   };
   const resume = () => setFrozen(null);
@@ -398,6 +427,10 @@ export function Traces({ live }: { live: boolean }) {
         break;
       case " ":
       case "Enter":
+        if (replay) {
+          handled = false;
+          break;
+        }
         if (frozen) resume();
         else pause();
         break;
@@ -415,7 +448,7 @@ export function Traces({ live }: { live: boolean }) {
     <section className={`panel traces${frozen ? " is-paused" : ""}`} aria-labelledby="traces-title">
       <div className="traces-head">
         <h2 id="traces-title" className="panel-title">
-          Last {WINDOW_S} seconds
+          {replay ? `${WINDOW_S} seconds before the playhead` : `Last ${WINDOW_S} seconds`}
         </h2>
         {frozen && (
           <span className="paused-note" role="status">
@@ -432,9 +465,11 @@ export function Traces({ live }: { live: boolean }) {
               <option value="400">0–400 km/h</option>
             </select>
           </label>
-          <button type="button" className="btn" aria-pressed={!!frozen} onClick={frozen ? resume : pause}>
-            {frozen ? "Back to live" : "Pause"}
-          </button>
+          {!replay && (
+            <button type="button" className="btn" aria-pressed={!!frozen} onClick={frozen ? resume : pause}>
+              {frozen ? "Back to live" : "Pause"}
+            </button>
+          )}
         </div>
       </div>
       <canvas
@@ -442,7 +477,11 @@ export function Traces({ live }: { live: boolean }) {
         className="trace-canvas"
         tabIndex={0}
         role="slider"
-        aria-label="Chart time cursor. Left and right arrows move it, Shift for 1 second steps, Space pauses, Escape returns to live."
+        aria-label={
+          replay
+            ? "Chart time cursor, relative to the replay playhead. Left and right arrows move it, Shift for 1 second steps, Escape removes it."
+            : "Chart time cursor. Left and right arrows move it, Shift for 1 second steps, Space pauses, Escape returns to live."
+        }
         aria-valuemin={-WINDOW_S}
         aria-valuemax={0}
         aria-valuenow={cursorOn ? (st.current.cursor ?? 0) : 0}
@@ -456,7 +495,7 @@ export function Traces({ live }: { live: boolean }) {
         }}
         onClick={(e) => {
           if (plotOffset(e.clientX) === null) return;
-          if (!frozen) pause();
+          if (!frozen && !replay) pause();
         }}
       />
       <div className={`trace-readout${cursorOn ? "" : " is-empty"}`}>
@@ -481,7 +520,11 @@ export function Traces({ live }: { live: boolean }) {
             ))}
           </dl>
         ) : (
-          <p className="muted small">Point at the chart, or focus it and use the arrow keys, to read the values at a moment. Click or press Space to pause.</p>
+          <p className="muted small">
+            {replay
+              ? "Point at the chart, or focus it and use the arrow keys, to read the values at a moment."
+              : "Point at the chart, or focus it and use the arrow keys, to read the values at a moment. Click or press Space to pause."}
+          </p>
         )}
       </div>
     </section>

@@ -5,7 +5,7 @@ import type { Snapshot } from "../stream";
 import type { Frame, N, WheelKey } from "../types";
 import type { ViewState } from "../viewstate";
 import { DemoButton } from "./DemoButton";
-import { Traces } from "./Traces";
+import { Traces, type TraceSource } from "./Traces";
 
 const SEGMENTS = 48;
 const SHIFT_WARN = 0.85;
@@ -326,7 +326,20 @@ function EmptyState({ snap, view }: { snap: Snapshot; view: ViewState }) {
   );
 }
 
-export function Live({ snap, view, focus }: { snap: Snapshot; view: ViewState; focus: boolean }) {
+export function Live({
+  snap,
+  view,
+  focus,
+  traceSource,
+  traceLive,
+}: {
+  snap: Snapshot;
+  view: ViewState;
+  focus: boolean;
+  /** replay passes its own sample source and clock; live uses the WebSocket store */
+  traceSource?: TraceSource;
+  traceLive?: boolean;
+}) {
   const frame = snap.frame;
   if (!frame) return <EmptyState snap={snap} view={view} />;
   return (
@@ -335,7 +348,7 @@ export function Live({ snap, view, focus }: { snap: Snapshot; view: ViewState; f
       <Cluster frame={frame} />
       <Inputs frame={frame} compactAux={focus} />
       <Chassis frame={frame} compact={focus} />
-      {!focus && <Traces live={!view.dim} />}
+      {!focus && <Traces live={traceLive ?? !view.dim} source={traceSource} />}
       {!focus && <OutputAndTiming frame={frame} />}
     </div>
   );

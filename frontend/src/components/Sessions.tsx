@@ -52,7 +52,10 @@ function useRecordings(active: boolean, nonce: number) {
   return { list, failed };
 }
 
-interface Overview {
+/** left gutter of the overview plot (speed labels); the timeline aligns its playhead to it */
+export const OV_PAD_L = 34;
+
+export interface Overview {
   duration_s: number;
   bucket_s: number;
   speed_kmh_min: (number | null)[];
@@ -90,7 +93,7 @@ function SpeedOverview({ id, samples }: { id: string; samples: number }) {
   );
 }
 
-function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
+export function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
   {
     const dpr = window.devicePixelRatio || 1;
     const w = c.clientWidth;
@@ -114,13 +117,13 @@ function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
     for (const v of [0, max / 2, max]) {
       const y = Math.round(h - 14 - (v / max) * (h - 24)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(34, y);
+      ctx.moveTo(OV_PAD_L, y);
       ctx.lineTo(w, y);
       ctx.stroke();
       ctx.fillText(String(v), 0, y + 4);
     }
     const n = ov.speed_kmh_max.length;
-    const bw = (w - 34) / n;
+    const bw = (w - OV_PAD_L) / n;
     ctx.fillStyle = speed;
     for (let i = 0; i < n; i++) {
       const lo = ov.speed_kmh_min[i];
@@ -128,16 +131,16 @@ function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
       if (lo === null || hi === null) continue; // gap stays empty
       const y1 = h - 14 - (hi / max) * (h - 24);
       const y2 = h - 14 - (lo / max) * (h - 24);
-      ctx.fillRect(34 + i * bw, y1, Math.max(1, bw), Math.max(1.5, y2 - y1));
+      ctx.fillRect(OV_PAD_L + i * bw, y1, Math.max(1, bw), Math.max(1.5, y2 - y1));
     }
     ctx.fillStyle = text3;
-    ctx.fillText("0:00", 34, h - 1);
+    ctx.fillText("0:00", OV_PAD_L, h - 1);
     const end = clock(ov.duration_s);
     ctx.fillText(end, w - ctx.measureText(end).width, h - 1);
   }
 }
 
-function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
+function Detail({ id, onChanged, onReplay }: { id: string; onChanged: () => void; onReplay?: (id: string) => void }) {
   const [d, setD] = useState<RecordingDetail | null>(null);
   const [form, setForm] = useState({ title: "", car_label: "", setup_label: "", notes: "" });
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -188,6 +191,11 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
         <h2 id="session-title">{d.title || when(d.started_utc)}</h2>
         <span className={`tag${d.status === "failed" || d.status === "incomplete" ? " tag-danger" : ""}`}>{STATUS_TEXT[d.status]}</span>
         {d.mode === "demo" && <span className="mode-badge">Demo</span>}
+        {onReplay && d.samples > 0 && (
+          <button type="button" className="btn session-replay" onClick={() => onReplay(d.id)}>
+            Replay
+          </button>
+        )}
       </header>
       {d.status === "recording" && <p className="note">Still recording. Figures below grow every 30 s as chunks are saved.</p>}
       {d.error && <p className="error-text small">{d.error}</p>}
@@ -286,7 +294,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
   );
 }
 
-export function Sessions({ snap }: { snap: Snapshot }) {
+export function Sessions({ snap, onReplay }: { snap: Snapshot; onReplay?: (id: string) => void }) {
   const rec = snap.status?.recorder;
   const active = rec?.state === "recording" || rec?.state === "stopping";
   const [nonce, setNonce] = useState(0);
@@ -332,7 +340,7 @@ export function Sessions({ snap }: { snap: Snapshot }) {
           ))}
         </ul>
       </section>
-      <section className="panel">{selected && <Detail key={selected} id={selected} onChanged={() => setNonce((n) => n + 1)} />}</section>
+      <section className="panel">{selected && <Detail key={selected} id={selected} onChanged={() => setNonce((n) => n + 1)} onReplay={onReplay} />}</section>
     </div>
   );
 }

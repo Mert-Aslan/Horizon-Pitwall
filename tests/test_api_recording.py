@@ -152,3 +152,30 @@ def test_benign_proactor_reset_is_recognised_exactly():
     assert is_benign_close_reset({"exception": ConnectionResetError(10054, "reset"), "handle": H()})
     assert not is_benign_close_reset({"exception": ConnectionResetError(10054, "reset"), "handle": "<Handle other()>"})
     assert not is_benign_close_reset({"exception": OSError("x"), "handle": H()})
+
+
+def test_replay_frames_window(client):
+    rid = client.post("/api/v1/recordings/start", json={}).json()["recording_id"]
+    for i in range(30):
+        send(client.rx.port, packet(TimestampMS=1000 + i * 16, Speed=float(i)))
+    send(client.rx.port, packet(TimestampMS=1000 + 29 * 16, Speed=99.0))  # equal ts, new content
+    assert wait_for(lambda: client.rec.samples == 31)
+    client.post("/api/v1/recordings/stop")
+    r = client.get(f"/api/v1/recordings/{rid}/frames?from=0&to=60", headers={"accept-encoding": "gzip"})
+    assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
+    body = r.json()
+    rows = body["rows"]
+    assert [x["i"] for x in rows] == list(range(31))  # sample index orders equal timestamps
+    assert [x["frame"]["normalized"]["speed_mps"] for x in rows[:3]] == [0.0, 1.0, 2.0]
+    assert rows[-1]["frame"]["game_timestamp_ms"] == rows[-2]["frame"]["game_timestamp_ms"]
+    assert rows[-1]["frame"]["normalized"]["speed_mps"] == 99.0
+    assert all(a["el"] <= b["el"] for a, b in zip(rows, rows[1:]))
+    f = rows[0]["frame"]
+    assert f["source"] == "recording" and f["recording_id"] == rid and f["stream_segment_id"]
+    assert body["truncated"] is False
+    assert client.get(f"/api/v1/recordings/{rid}/frames?from=0&to=61").status_code == 422
+    assert client.get(f"/api/v1/recordings/{rid}/frames?from=5&to=4").status_code == 422
+    capped = client.get(f"/api/v1/recordings/{rid}/frames?from=0&to=60&max=10").json()
+    assert len(capped["rows"]) == 10 and capped["truncated"] is True
+    # replay reads never change the live hub
+    assert client.hub.mode == "live"

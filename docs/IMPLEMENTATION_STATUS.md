@@ -1,6 +1,6 @@
 # Uygulama durumu
 
-Son güncelleme: 16 Kasım 2026 · **Sürüm 0.3.1** (backend `APP_VERSION` 0.3.1, frontend `package.json` 0.3.1, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
+Son güncelleme: 16 Kasım 2026 · **Sürüm 0.4.0** (backend `APP_VERSION` 0.4.0, frontend `package.json` 0.4.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
 
 ## Güncel durum
 
@@ -9,7 +9,7 @@ Son güncelleme: 16 Kasım 2026 · **Sürüm 0.3.1** (backend `APP_VERSION` 0.3.
 | Faz 0–2 (0.2.0) | ✅ | veri doğruluğu, Live kokpit, Diagnostics; aşağıda "Geçmiş" |
 | **M1** akış/config/segment + tanılama yakalaması + build kimliği | ✅ | D-1 ve D-2 **gerçek veriyle karara bağlandı** (0.3.1) |
 | **M2** manuel kayıt + Sessions + kurtarma | ✅ | **gerçek oyunla doğrulandı**: 484 s, 25 703 örnek, 0 düşen, dosya kontrolü geçti |
-| M3 istemciye özel replay | ⏳ başlanmadı | Sessions'ta replay düğmesi bilinçli olarak yok |
+| **M3** istemciye özel replay | ✅ | gerçek 8 dk kaydın kopyasıyla tarayıcıda doğrulandı |
 | M4–M6 | ⏳ | |
 
 Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçek tarayıcı testi** (headless Chromium), **pasif oyun gözlemi** (kullanıcının çalışan örneğinden salt okuma), **kontrollü gerçek oyun doğrulaması** (henüz yok).
@@ -29,6 +29,17 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 | WinError 10054 logu | kullanıcının logunda 1 kez (15:20:50) | yalnız tam bu durum tek satır INFO + sayaç; diğerleri varsayılan işleyicide | yeniden üretilemedi (0.2.0 ve 0.3.0 backend, 4 desen × 5); **tetikleyici açık** |
 
 **Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. Baseline commit `716cbc5` üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
+
+### 0.4.0 — M3 replay
+
+Sessions → **Replay** bir kaydı aynı kokpit panelleriyle oynatır: oynat/duraklat, 0.5× / 1× / 2×, zaman çizelgesinde tıklama/sürükleme ve klavye ile sarma (←/→ 5 s, Shift 1 s, Home/End, Space), olaya atlama, "Close replay".
+
+- **Canlıdan bağımsız:** replay yalnız HTTP ile kayıt dosyalarını okur; hub'ın modu değişmez, UDP'ye hiçbir şey gönderilmez, canlı akış ve süren kayıt devam eder (tarayıcı testinde replay sırasında canlı sequence 583 → 652, mod `live`). Üst şerit canlı bağlantıyı `Live: …` olarak ayrıca gösterir; replay'de mavi **Replay** rozeti ve kontrol şeridi hep görünür.
+- **Saat:** oynatma başı kayıt saniyesidir (`el`, monotonic). Oyun zaman damgası yalnız bilgi olarak gösterilir; eşit zaman damgalı örnekler kayıt indeksi `i` ile sıralı kalır.
+- **Sınırlı veri:** `GET /api/v1/recordings/{id}/frames?from&to` (en çok 60 s / 8000 satır, yalnız kesişen chunk'lar açılır, gzip). Oynatıcı oynatma başının 22 s gerisini ve 12 s ilerisini tutar, ilerisini 5 s kala ister; eskileri atar. Test: 60 s'lik kayıt 2× oynatılırken bellekte en çok ~2 900 satır.
+- **Sarma güvenliği:** her sarma bir *generation* artırır; eski pencerenin geç cevabı yeni konumu ezmez (test). Art arda sarmalar 150 ms durulunca tek istek gönderir — bu olmadan hızlı sarmada sunucu iptal edilen istekleri de işlediği için son konum ~5 s gecikmişti (gerçek kayıtla ölçüldü).
+- **Boşluklar ve boş paketler:** oynatma başının 250 ms yakınında örnek yoksa "No data was recorded at this moment (gap)", boş oyun paketlerinde (P-9) "The game sent no driving data here"; ikisinde de son gerçek değerler soluk. Zaman sıkıştırılmaz.
+- **Ölçüm (gerçek kayıt kopyası, izole örnek):** 12 s'lik pencere 632–646 satır, 276–398 KiB gzip (≈ 2 MiB ham JSON), sunucuda 190–214 ms; 2:00'a atlayıp oynatma, 0:12'deki boş paket aralığı doğru; sayfa JS heap'i ~10–22 MiB.
 
 ### 0.3.1 — gerçek oyun oturumunun sonuçları (16 Kasım 2026)
 
@@ -55,10 +66,10 @@ Yük testindeki yavaş istemci (5 mesaj/s okuyan) **29.6 s (p50) / 50.6 s (max)*
 
 | Komut | Sonuç |
 |---|---|
-| `python -m pytest` | **195 passed** (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
-| `cd frontend; npm test` (vitest) | **35 passed** (21 mantık + 14 akış istemcisi: F-01, F-03, boş paketler, yaşam döngüsü, akış kontrolü, doğrulama) |
+| `python -m pytest` | **196 passed** (+1: replay pencere API'si) (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
+| `cd frontend; npm test` (vitest) | **45 passed** (21 mantık + 14 akış istemcisi + 10 replay oynatıcısı: sarma doğruluğu, eski pencerenin yeni konumu ezmemesi, 2× sıra ve bitiş, boşluk, sınırlı bellek, boş paket, hata/yeniden deneme, durulan sarma, başlangıç) |
 | `npx tsc --noEmit`, `npm run build` | temiz; build `dist/build-manifest.json` üretir |
-| `python tools/ui_smoke.py` | **65/65** gerçek tarayıcı kontrolü (0.3.1: boş paketlerde "No driving data", son değerlerin soluk kalması, açıklama banner'ı, veri dönünce Receiving) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
+| `python tools/ui_smoke.py` | **75/75** gerçek tarayıcı kontrolü (0.3.1: boş paketlerde "No driving data" …; 0.4.0: replay rozeti, paneller, `Live:` etiketi, oynatma başına göre grafik, 0. saniyede ve sonda değerin kayıtla eşleşmesi, 2× ilerleme, replay sırasında canlı akışın sürmesi, Close replay) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
 | `tools/repro_close_reset.py` | 10 RST → 0 traceback (0.2.0 ve 0.3.0 backend) |
 
 Smoke testine eklenenler: rAF askıdayken veri gelirken yeniden bağlanma olmaması, sayfa tekrar görünür olunca Receiving, Record/Stop'un sunucu durumunu yansıtması, kayıt süresi/örnek sayısı, Sessions listesi/detay/kaydedilen örnek/dosya bütünlüğü/etiket kaydetme/hız özeti, Sessions'ta 390 px taşma yok, **sayfa kapalıyken kaydın sürmesi** (127 örnek) ve yeniden açılan sayfanın kaydı göstermesi, Diagnostics'ten yakalama ve özeti, yeniden başlayan sunucunun yeni instance kimliği, aynı bundle'da sahte "yeni UI" uyarısı olmaması.
@@ -93,7 +104,7 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 
 ## Sıradaki tek somut iş
 
-**M3 — istemciye özel replay:** Sessions'tan bir kaydı açıp oynatma/duraklatma/0.5–2× hız/sarma; zaman tabanı kayıttaki `el`, veri `Store.iter_lines` aralık okumasıyla sınırlı parçalar halinde; seek için generation id; canlı akış ve süren kayıt etkilenmez; boş paket aralıkları ve boşluklar görünür kalır.
+**M4 — Telemetry Lab:** Traces'in çizim/zaman ekseni/imleç modelini (artık `TraceSource` ile canlı ve replay'de ortak) kayıt üzerinde kanal seçimi, aralık seçimi + zoom, min/max korumalı seyreltme ve seçili aralık özetiyle genişletmek; G-G ve dünya X/Z rota izi (doğrulanmış eksen anlamlarıyla, teleport/boşlukta kesilen).
 
 ## Açık işler
 
@@ -103,7 +114,8 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 - RSS eğilimi için uzun soak.
 - Masaüstü tarayıcıda gerçek simge durumu/arka plan testi (headless sınırı).
 - Gerçek %200 tarayıcı yakınlaştırması ve farklı DPI (şimdiye kadar 960×540 viewport eşdeğeri kullanıldı; birebir aynı değil).
-- Windows paketleme, katalog, replay, analiz (M3–M6).
+- Replay: olay işaretleri yalnız hub olaylarıdır (kullanıcı işareti/not eklemek M4); replay URL'ye yazılmaz (sayfa yenilenince Sessions'a dönülür).
+- Windows paketleme, katalog, analiz (M4–M6).
 - Kayıt silme/arşivleme arayüzü bilinçli olarak yok; kayıtlar `<data_dir>/recordings` altında ve yalnız elle silinir.
 
 ## Sürüm kontrolü

@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocket
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ..buildinfo import BuildInfo
@@ -41,6 +42,8 @@ log = logging.getLogger("pitwall.api")
 # rate of backlog (measured: 1.3 s at 5 msg/s instead of 30-50 s without it). While
 # the window is full, frames are withheld (latest wins).
 FLOW_WINDOW = 6
+REPLAY_MAX_WINDOW_S = 60.0
+REPLAY_MAX_ROWS = 8000
 FLOW_ACK_EVERY = 2
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -207,6 +210,8 @@ def create_app(
             receiver.stop()
 
     app = FastAPI(title=APP_NAME, version=APP_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url="/api/v1/openapi.json")
+    # Replay windows are large, repetitive JSON; gzip cuts them ~10x. WebSockets are not affected.
+    app.add_middleware(GZipMiddleware, minimum_size=4096)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=_local_hosts(cfg))
 
     @app.middleware("http")
@@ -267,7 +272,7 @@ def create_app(
                 "raw_inspector": True,
                 "recording": recorder is not None,
                 "diagnostic_capture": capture is not None,
-                "replay": False,
+                "replay": recorder is not None,
                 "analysis": False,
                 "car_catalog": False,
             },
@@ -367,6 +372,68 @@ def create_app(
             return need_recorder().store.verify(rec_id)
         except KeyError:
             raise HTTPException(404, "recording not found") from None
+
+    @app.get("/api/v1/recordings/{rec_id}/frames")
+    def recording_frames(
+        rec_id: str,
+        t_from: float = Query(0.0, alias="from", ge=0.0),
+        t_to: float = Query(..., alias="to", ge=0.0),
+        max_rows: int = Query(REPLAY_MAX_ROWS, alias="max", ge=1, le=REPLAY_MAX_ROWS),
+    ):
+        """Decoded frames of a time window for client-side replay. The window is bounded
+        (at most REPLAY_MAX_WINDOW_S seconds and REPLAY_MAX_ROWS rows); only chunks that
+        overlap it are opened. Time base: ``el`` = seconds since recording start
+        (monotonic); ``i`` orders samples, also when game timestamps are equal."""
+        store = need_recorder().store
+        rec = store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        if t_to < t_from or t_to - t_from > REPLAY_MAX_WINDOW_S:
+            raise HTTPException(422, f"window must be 0..{REPLAY_MAX_WINDOW_S:.0f} s long")
+        seg_ids = {s["segment_index"]: s["stream_segment_id"] for s in rec["segments_detail"]}
+        rows = []
+        truncated = False
+        for line in store.iter_lines(rec_id, t_from, t_to):
+            if len(rows) >= max_rows:
+                truncated = True
+                break
+            res = dec.decode(decode_datagram(line))
+            if not res.ok:
+                continue
+            n, d, q = dec.normalize(res.raw)
+            q["tail_hex"] = res.tail.hex()
+            q["packet_length"] = res.length
+            rows.append({
+                "i": line["i"],
+                "el": line["el"],
+                "frame": {
+                    "schema_version": schema.SCHEMA_VERSION,
+                    "api_version": API_VERSION,
+                    "recording_id": rec_id,
+                    "stream_segment_id": seg_ids.get(line["seg"], f"segment-{line['seg']}"),
+                    "session_id": seg_ids.get(line["seg"], f"segment-{line['seg']}"),
+                    "sequence": line["sq"],
+                    "sample_index": line["i"],
+                    "game_timestamp_ms": line["ts"],
+                    "recording_elapsed_s": line["el"],
+                    "received_at": line["w"],
+                    "mode": rec["mode"],
+                    "source": "recording",
+                    "normalized": n,
+                    "derived": d,
+                    "quality": q,
+                },
+            })
+        duration = rec["duration_s"] or (rec["chunks"][-1]["t_end_s"] if rec["chunks"] else 0.0) or 0.0
+        return {
+            "recording_id": rec_id,
+            "from": t_from,
+            "to": t_to,
+            "duration_s": duration,
+            "status": rec["status"],
+            "truncated": truncated,
+            "rows": rows,
+        }
 
     @app.get("/api/v1/recordings/{rec_id}/overview")
     def recording_overview(rec_id: str, points: int = Query(600, ge=10, le=4000)):

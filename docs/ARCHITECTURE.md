@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.3.1. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.4.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -35,7 +35,7 @@ Sürüm 0.3.1. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + k
 | `backend/config.py`, `backend/main.py` | Sıkı ayar doğrulama (varsayılan < JSON < CLI), UTC loglama, başlatma/kapanış |
 | `frontend/src` | React + TypeScript + Vite arayüzü |
 
-Henüz yok: replay (M3), Telemetry Lab/analiz (M4), araç kataloğu (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
+Henüz yok: Telemetry Lab/analiz (M4), araç kataloğu (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
 
 ## Kimlik ve zaman
 
@@ -107,6 +107,7 @@ Boş paketler (`IsRaceOn = 0`, diğer her şey 0; P-9) kabul edilir ama normaliz
 | `PATCH /api/v1/recordings/{id}` | başlık, araç etiketi, setup etiketi, not |
 | `GET /api/v1/recordings/{id}/verify` | checksum + satır sayısı + sürekli örnek indeksi kontrolü |
 | `GET /api/v1/recordings/{id}/overview?points=` | tüm kayıt için hız min/max zarfı (boşluklar `null`) |
+| `GET /api/v1/recordings/{id}/frames?from=&to=&max=` | replay penceresi: decode edilmiş frame'ler (`i`, `el`, canlıyla aynı `normalized/derived/quality` + `recording_id`, `sample_index`, `recording_elapsed_s`); en çok 60 s / 8000 satır, `truncated` bayrağı |
 | `GET/POST /api/v1/diagnostics/capture`, `POST …/capture/stop` | tanılama yakalaması (5–120 s, boyut sınırlı) |
 | `WS /api/v1/stream` | `hello` → `frame`; istemci `subscribe`, `resync`, `flow`, `ack` gönderebilir |
 
@@ -121,6 +122,17 @@ Durum değiştiren tüm istekler same-origin kontrolünden ve LAN modunda loopba
 - Tarayıcıda: gelen her mesaj **anında** taşıma canlılığını (`lastRxAt`) günceller ve onaylanır; React'e işleme `requestAnimationFrame` başına en çok bir kez. Watchdog yalnız `lastRxAt`'e bakar, bu yüzden rAF'in durduğu arka plan sekmesi yanlışlıkla yeniden bağlanmaz (F-01). `start/stop/dispose` idempotent; zamanlayıcılar, görünürlük dinleyicisi, bekleyen yeniden bağlanma ve eski soket callback'leri temizlenir.
 - Ayrı sayaç havuzları: `invalid_datagrams` / `foreign_datagrams` (hub), `ui_rate_limited_frames` / `flow_withheld_frames` / `slow_sends` (istemci başına), `ws_send_timeouts` / `ws_closed` / `ws_errors` (akış), `dropped` / `queue_high_watermark` / `flush_ms_max` (recorder). Ekran örneklemesi ağ kaybı olarak sunulmaz.
 
+## Replay (M3)
+
+Replay tamamen istemcidedir (`frontend/src/replay.ts` → `ReplayPlayer`). Sunucu yalnız kayıt dosyalarını pencere pencere okur ve decode eder; hub'ın modu, canlı akış, WebSocket ve süren bir kayıt etkilenmez. Birden çok tarayıcı aynı anda farklı kayıtları oynatabilir.
+
+- Saat: oynatma başı = kayıt saniyesi (`el`). `position = basePos + (now − baseNow) × rate`; duraklatma/hız değişiminde taban yeniden kurulur. Oyun `TimestampMS`'i yalnız gösterilir.
+- Tampon: oynatma başının 22 s gerisi + 12 s ilerisi; ileriki pencere 5 s kala istenir, geride kalanlar atılır. Grafik için ayrı bir `Ring` (t = `el`).
+- Sarma: `generation` sayacı + `AbortController`; geç gelen eski cevap yok sayılır. Art arda sarmalar 150 ms durulunca tek pencere ister.
+- Boşluk (oynatma başına 250 ms içinde örnek yok) ve boş paket (P-9) durumları görünür; son gerçek değerler soluk gösterilir, zaman sıkıştırılmaz.
+- `Traces` bileşeni bir `TraceSource` alır (`history` + `now()` + `subscribe`): canlıda WebSocket store'u ve tarayıcı alım saati, replay'de oynatıcı ve kayıt saati. Çizim, imleç ve okuma satırı ortaktır; replay'de "Pause/Back to live" yerine replay kontrolleri vardır.
+- Gzip (Starlette `GZipMiddleware`, ≥ 4 KiB) replay pencerelerini ~7× küçültür; WebSocket etkilenmez.
+
 ## Sınırlar
 
 | Yapı | Sınır |
@@ -131,6 +143,7 @@ Durum değiştiren tüm istekler same-origin kontrolünden ve LAN modunda loopba
 | Uzunluk ve kuyruk byte histogramları | 64 anahtar üstünde ilk 32'ye kırpılır |
 | Recorder kuyruğu | `recorder_queue_size` (varsayılan 20 000); dolunca `dropped` |
 | Tanılama yakalaması | 5–120 s, `diagnostic_capture_max_mb` (16 MB); en çok 10 dosya |
+| Replay penceresi (sunucu) / tampon (tarayıcı) | 60 s ve 8000 satır / ~34 s |
 | Log | 1 MB × 3 dönen dosya |
 
 ## Güvenlik (yerel ürün ölçeğinde)

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Banners } from "./components/Banners";
 import { Diagnostics } from "./components/Diagnostics";
 import { Live } from "./components/Live";
+import { Replay } from "./components/Replay";
 import { Sessions } from "./components/Sessions";
 import { TABS, TopBar, type Tab } from "./components/TopBar";
 import { usePref } from "./prefs";
@@ -38,11 +39,18 @@ export function App() {
   const recordingAvailable = !!caps?.features.recording;
   const shown: Tab = tab === "sessions" && caps && !recordingAvailable ? "live" : tab;
 
-  useEffect(() => {
-    document.title = view.demo ? "Demo · Horizon Pitwall" : `${view.label} · Horizon Pitwall`;
-  }, [view.demo, view.label]);
 
   const focus = focusPref === "on";
+  // Replay is a view on top of the tabs; it never changes the server's live mode.
+  const [replayId, setReplayId] = useState<string | null>(null);
+  const openTab = (t: Tab) => {
+    setReplayId(null);
+    setTab(t);
+  };
+
+  useEffect(() => {
+    document.title = replayId ? "Replay · Horizon Pitwall" : view.demo ? "Demo · Horizon Pitwall" : `${view.label} · Horizon Pitwall`;
+  }, [replayId, view.demo, view.label]);
   return (
     <div className={`app state-${view.kind}${view.demo ? " is-demo" : ""}`}>
       <a className="skip" href="#main">
@@ -51,18 +59,25 @@ export function App() {
       <TopBar
         snap={snap}
         view={view}
-        tab={shown}
-        onTab={setTab}
+        tab={replayId ? null : shown}
+        onTab={openTab}
+        replay={!!replayId}
         focus={focus}
         onFocus={(on) => setFocusPref(on ? "on" : "off")}
         demoOrdinal={caps?.demo_car_ordinal ?? null}
         recordingAvailable={recordingAvailable}
       />
-      <Banners snap={snap} view={view} />
+      <Banners snap={snap} view={view} replay={!!replayId} />
       <main id="main" tabIndex={-1}>
-        {shown === "live" && <Live snap={snap} view={view} focus={focus} />}
-        {shown === "sessions" && <Sessions snap={snap} />}
-        {shown === "diagnostics" && <Diagnostics snap={snap} view={view} caps={caps} />}
+        {replayId ? (
+          <Replay key={replayId} id={replayId} liveSnap={snap} focus={focus} onClose={() => openTab("sessions")} />
+        ) : (
+          <>
+            {shown === "live" && <Live snap={snap} view={view} focus={focus} />}
+            {shown === "sessions" && <Sessions snap={snap} onReplay={setReplayId} />}
+            {shown === "diagnostics" && <Diagnostics snap={snap} view={view} caps={caps} />}
+          </>
+        )}
       </main>
     </div>
   );

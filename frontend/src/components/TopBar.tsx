@@ -10,7 +10,9 @@ const TAB_LABEL: Record<Tab, string> = { live: "Live", sessions: "Sessions", dia
 interface Props {
   snap: Snapshot;
   view: ViewState;
-  tab: Tab;
+  /** null while a replay is open (no tab is current) */
+  tab: Tab | null;
+  replay?: boolean;
   onTab: (t: Tab) => void;
   focus: boolean;
   onFocus: (on: boolean) => void;
@@ -129,7 +131,7 @@ function RecordControl({ snap }: { snap: Snapshot }) {
   );
 }
 
-export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable }: Props) {
+export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable, replay = false }: Props) {
   const st = snap.status;
   const tabs = TABS.filter((t) => t !== "sessions" || recordingAvailable);
   return (
@@ -151,19 +153,19 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
         ))}
       </nav>
       <div className="topbar-car">
-        <CarIdentity snap={snap} demoOrdinal={demoOrdinal} />
+        {replay ? <span className="car-id muted">Replaying a recording</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} />}
       </div>
       <div className="topbar-status">
         <RecordControl snap={snap} />
-        {tab === "live" && (
+        {(tab === "live" || replay) && (
           <button type="button" className="btn btn-quiet btn-small focus-toggle" aria-pressed={focus} onClick={() => onFocus(!focus)}>
             Focus view
           </button>
         )}
         {view.demo && <span className="mode-badge">Demo</span>}
-        <span className={`conn conn-${view.kind}`} role="status" aria-live="polite">
+        <span className={`conn conn-${view.kind}`} role="status" aria-live="polite" title={replay ? "State of the live link (the replay does not change it)" : undefined}>
           <span className="conn-mark" aria-hidden="true" />
-          {view.label}
+          {replay ? `Live: ${view.label}` : view.label}
         </span>
         <span className="conn-detail" aria-hidden={view.kind !== "receiving" && view.kind !== "no_data" && view.kind !== "stale"}>
           {(view.kind === "receiving" || view.kind === "no_data") && st && (
