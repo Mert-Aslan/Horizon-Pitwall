@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "Horizon Pitwall"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 GAME_RESERVED_PORTS = range(5200, 5301)  # the game binds its own socket in this range
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 EQUAL_TIMESTAMP_POLICIES = ("reject", "accept_changed")
@@ -60,8 +60,10 @@ class Config:
     data_dir: str = ""
     log_level: str = "INFO"
     # D-1: what to do with a packet whose TimestampMS equals the previous accepted one.
-    # "reject" (default) until real-game evidence says otherwise; see docs/PROTOCOL.md.
-    equal_timestamp_policy: str = "reject"
+    # Byte-identical repeats are always rejected. "accept_changed" (default since 0.3.1,
+    # based on real data) keeps new content that arrives with an unchanged timestamp;
+    # "reject" restores the 0.2/0.3.0 behaviour. See docs/PROTOCOL.md D-1.
+    equal_timestamp_policy: str = "accept_changed"
     recorder_queue_size: int = 20_000
     diagnostic_capture_max_mb: float = 16.0
 

@@ -1,0 +1,120 @@
+{
+ "source": "Pitwall recording 20261116T192643Z-e26480 (Forza Horizon 6, PC, 16 Nov 2026, one session, one car)",
+ "note": "Real game bytes. Expectations describe this app's decoding; game semantics for gear codes are observations.",
+ "files": [
+  {
+   "file": "empty_race_off.bin",
+   "length": 324,
+   "sample_index": 0,
+   "game_timestamp_ms": 40407750,
+   "expect": {
+    "flags": [
+     "empty_packet"
+    ],
+    "gear_raw": null,
+    "gear_label": null,
+    "race_on": false,
+    "speed_kmh_is_null": true,
+    "steer": null,
+    "brake": null,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "steer_full_right.bin",
+   "length": 324,
+   "sample_index": 173,
+   "game_timestamp_ms": 40411125,
+   "expect": {
+    "flags": [],
+    "gear_raw": 1,
+    "gear_label": "1",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": 1.0,
+    "brake": 0.0,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "between_gears11.bin",
+   "length": 324,
+   "sample_index": 300,
+   "game_timestamp_ms": 40413578,
+   "expect": {
+    "flags": [],
+    "gear_raw": 11,
+    "gear_label": "N",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": 0.0,
+    "brake": 0.0,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "steer_full_left.bin",
+   "length": 324,
+   "sample_index": 342,
+   "game_timestamp_ms": 40414390,
+   "expect": {
+    "flags": [],
+    "gear_raw": 2,
+    "gear_label": "2",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": -1.0,
+    "brake": 0.0,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "forward_gear4_fast.bin",
+   "length": 324,
+   "sample_index": 517,
+   "game_timestamp_ms": 40417562,
+   "expect": {
+    "flags": [],
+    "gear_raw": 4,
+    "gear_label": "4",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": -1.0,
+    "brake": 0.0,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "full_brake.bin",
+   "length": 324,
+   "sample_index": 1340,
+   "game_timestamp_ms": 40432859,
+   "expect": {
+    "flags": [],
+    "gear_raw": 4,
+    "gear_label": "4",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": 0.0,
+    "brake": 1.0,
+    "tail_hex": "00"
+   }
+  },
+  {
+   "file": "reverse_gear0.bin",
+   "length": 324,
+   "sample_index": 20653,
+   "game_timestamp_ms": 40796875,
+   "expect": {
+    "flags": [],
+    "gear_raw": 0,
+    "gear_label": "R",
+    "race_on": true,
+    "speed_kmh_is_null": false,
+    "steer": 0.0,
+    "brake": 1.0,
+    "tail_hex": "00"
+   }
+  }
+ ]
+}

@@ -49,6 +49,12 @@ export function Banners({ snap, view }: { snap: Snapshot; view: ViewState }) {
     const secs = snap.retryAt ? Math.max(0, Math.round((snap.retryAt - performance.now()) / 1000)) : null;
     items.push({ tone: "danger", text: `Lost connection to the Pitwall server${secs !== null ? `; retrying in ${secs} s` : ""}. Values below are frozen.` });
   }
+  if (view.kind === "no_data") {
+    items.push({
+      tone: "warn",
+      text: `The game is sending packets without driving data (IsRaceOn = 0, every value zero).${view.hasFrame ? " Last driving values shown dimmed." : ""} Data returns when you are driving again.`,
+    });
+  }
   if (view.kind === "stale" && view.hasFrame) {
     items.push({
       tone: "warn",

@@ -186,6 +186,17 @@ def main() -> int:
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "synthetic live feed is received")
             check(wait_until(lambda: page.locator(".car-name").inner_text() == "Car #-2"), "unknown car shown by id")
 
+            # empty game packets (real FH6 outside a drive): not shown as measured zeros
+            speed_before = page.locator(".speed-num").inner_text()
+            feeder.empty = True
+            check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "No driving data"), "empty packets show 'No driving data'")
+            check(page.locator(".live.is-dim").count() == 1 and page.locator(".speed-num").inner_text() not in ("0", "—"), f"last real values stay, dimmed (speed {speed_before} -> {page.locator('.speed-num').inner_text()})")
+            check("without driving data" in page.locator(".banners").inner_text(), "banner explains the empty packets")
+            if out:
+                page.screenshot(path=str(out / "no-driving-data-1920.png"))
+            feeder.empty = False
+            check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "real data again -> Receiving")
+
             # F-01 in a real browser. Headless Chromium does not hide a tab that is moved to
             # the background, so the background condition that matters - requestAnimationFrame
             # not running - is reproduced by holding back rAF callbacks for 6 s while data

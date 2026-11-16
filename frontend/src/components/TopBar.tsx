@@ -165,8 +165,8 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
           <span className="conn-mark" aria-hidden="true" />
           {view.label}
         </span>
-        <span className="conn-detail" aria-hidden={view.kind !== "receiving" && view.kind !== "stale"}>
-          {view.kind === "receiving" && st && (
+        <span className="conn-detail" aria-hidden={view.kind !== "receiving" && view.kind !== "no_data" && view.kind !== "stale"}>
+          {(view.kind === "receiving" || view.kind === "no_data") && st && (
             <>
               <span>{isNum(st.observed_hz) ? `${fmt(st.observed_hz)} Hz` : "— Hz"}</span>
               <span>{ageText(st.packet_age_ms)} old</span>

@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.3.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.3.1. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -58,6 +58,8 @@ Tarayıcının kendi alım zamanı yalnız canlı görüntüleme içindir (son 2
 
 ## Veri katmanları
 
+Boş paketler (`IsRaceOn = 0`, diğer her şey 0; P-9) kabul edilir ama normalize/türetilmiş değerleri `null`, kalite bayrağı `empty_packet`; tarayıcı bu durumda son gerçek frame'i soluk gösterir ve durumu "No driving data" yapar.
+
 `raw` (paketin söylediği, tam hassasiyet; NaN/Inf JSON'da `null`) → `normalized` (SI/fraksiyon/enum, geçersiz → `null` + neden) → `derived` (km/h, mph, kW, hp, rpm oranı, g) → görüntü (yuvarlama yalnız `frontend/src/format.ts`). Hiçbir katmanda `or 0` yoktur; `null` "bilinmiyor", `0` "ölçülmüş sıfır" demektir. Kayıtlar yalnız ham datagram'ı saklar; normalize değerler okuma sırasında decoder ile yeniden üretilir.
 
 ## Frame sözleşmesi (api_version 1, geriye uyumlu genişletildi)
@@ -96,7 +98,7 @@ Tarayıcının kendi alım zamanı yalnız canlı görüntüleme içindir (son 2
 | `GET /api/v1/build` | app/api/schema sürümü, `build_id` (= sürüm + backend içerik özeti), UI manifesti, `server_instance_id`, başlangıç zamanı; commit iddia edilmez |
 | `GET /api/v1/telemetry/latest` | son snapshot + tazelik |
 | `GET /api/v1/telemetry/history?seconds=1..120` | **geçerli segmentin** hız/rpm/pedal/direksiyon dizileri |
-| `GET /api/v1/capabilities` | şema, özellik bayrakları (`recording`, `diagnostic_capture` true; replay/analysis/car_catalog false), doğrulama durumu, eşit zaman damgası politikası |
+| `GET /api/v1/capabilities` | şema, özellik bayrakları (`recording`, `diagnostic_capture` true; replay/analysis/car_catalog false), doğrulama durumu, eşit zaman damgası politikası (varsayılan `accept_changed`) |
 | `GET /api/v1/diagnostics` | sayaçlar, eşit zaman damgası sınıfları, sınırlar, araç kimliği, olaylar, akış/recorder metrikleri, build |
 | `POST /api/v1/demo {"enabled": bool}` | demo modu |
 | `GET /api/v1/recordings` | kayıt listesi + recorder durumu + başlangıç kurtarma raporu |

@@ -166,6 +166,7 @@ def test_gap_estimation(hub, clock):
 
 
 def test_duplicate_analysis_separates_identical_from_changed(hub, clock):
+    hub.equal_timestamp_policy = "reject"  # this test pins the classification, not the policy
     feed(hub, clock, 100, Speed=10.0)
     assert feed(hub, clock, 100, Speed=10.0) == "duplicates"  # same bytes again
     assert feed(hub, clock, 100, Speed=11.5) == "duplicates"  # new content, same timestamp

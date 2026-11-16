@@ -32,8 +32,8 @@ export function clamp(v: number, lo: number, hi: number): number {
 }
 
 /** Gear text: forward gears by number; 0 shows the raw code (R/N encoding unverified). */
-export function gearText(raw: N | undefined, label: string | null | undefined): { main: string; note: string | null } {
-  if (label) return { main: label, note: null };
+export function gearText(raw: N | undefined, label: string | null | undefined, note?: string | null): { main: string; note: string | null } {
+  if (label) return { main: label, note: note ?? null };
   if (!isNum(raw)) return { main: DASH, note: null };
   if (raw === 0) return { main: "0", note: "R/N code, unverified" };
   return { main: String(raw), note: "unrecognised gear code" };

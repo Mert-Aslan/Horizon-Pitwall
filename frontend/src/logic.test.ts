@@ -22,9 +22,10 @@ describe("format", () => {
     expect(fmtLap(83.456)).toBe("1:23.456");
     expect(fmtLap(null)).toBe(DASH);
   });
-  it("gear 0 is a raw code, not R or N", () => {
+  it("gear codes: server label + observation note; old servers' raw 0 stays a code", () => {
+    expect(gearText(0, "R", "reverse (code 0; observed, not documented)")).toEqual({ main: "R", note: "reverse (code 0; observed, not documented)" });
     expect(gearText(0, null)).toEqual({ main: "0", note: "R/N code, unverified" });
-    expect(gearText(4, "4").main).toBe("4");
+    expect(gearText(4, "4")).toEqual({ main: "4", note: null });
   });
   it("age text", () => {
     expect(ageText(250)).toBe("250 ms");
@@ -89,6 +90,7 @@ describe("view state", () => {
     serverRestarts: 0,
     protocolError: null,
     badMessages: 0,
+    telemetryEmpty: false,
     ...over,
   });
   it("server link loss overrides the last server status", () => {
@@ -98,6 +100,12 @@ describe("view state", () => {
     const v = deriveView(snap({ status: status({ connection_state: "stale" }) }));
     expect(v.kind).toBe("stale");
     expect(v.dim).toBe(true);
+  });
+  it("empty game packets are 'No driving data', dimmed, not 'Receiving'", () => {
+    const v = deriveView(snap({ telemetryEmpty: true }));
+    expect(v.kind).toBe("no_data");
+    expect(v.dim).toBe(true);
+    expect(deriveView(snap({ telemetryEmpty: true, link: "closed" })).kind).toBe("server_offline");
   });
   it("demo is flagged", () => {
     expect(deriveView(snap({ status: status({ mode: "demo" }) })).demo).toBe(true);

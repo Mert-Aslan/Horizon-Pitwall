@@ -61,7 +61,7 @@ def test_build_identity(client):
     h = client.get("/api/v1/health").json()
     assert h["build"]["server_instance_id"] == b["server_instance_id"]
     caps = client.get("/api/v1/capabilities").json()
-    assert caps["features"]["recording"] is True and caps["equal_timestamp_policy"] == "reject"
+    assert caps["features"]["recording"] is True and caps["equal_timestamp_policy"] == "accept_changed"
 
 
 def test_hello_carries_instance_and_build(client):
@@ -125,7 +125,8 @@ def test_diagnostic_capture_over_http(client, tmp_path):
     s = st["captures"][0]
     assert s["datagrams"] == 8
     assert s["equal_timestamp"] == {"identical": 1, "tail_only": 0, "non_finite": 0, "changed": 1}
-    assert s["outcomes"] == {"accepted": 5, "duplicates": 2, "rejected:too_short": 1}
+    # default policy: the repeat is rejected, the new content with the same timestamp kept
+    assert s["outcomes"] == {"accepted": 6, "duplicates": 1, "rejected:too_short": 1}
     header, records = read_capture(tmp_path / "captures" / s["file"])
     assert header["sources_masked"] is True and {r["src"] for r in records} == {"source-1"}
     assert [r["i"] for r in records] == list(range(8))  # arrival order

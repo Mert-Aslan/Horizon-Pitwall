@@ -118,6 +118,7 @@ class Feeder(threading.Thread):
         super().__init__(daemon=True)
         self.port, self.t0 = port, t0
         self.stop_ev = threading.Event()
+        self.empty = False  # True: send what the real game sends outside a drive (IsRaceOn 0, all zero)
 
     def run(self) -> None:
         tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -125,10 +126,15 @@ class Feeder(threading.Thread):
         nxt = start
         while not self.stop_ev.is_set():
             t = self.t0 + time.monotonic() - start
-            vals = demo_values(t)
-            vals["CarOrdinal"] = -2
-            vals["TimestampMS"] = int(t * 1000)
-            tx.sendto(build_packet(vals), ("127.0.0.1", self.port))
+            if self.empty:
+                pkt = bytearray(324)
+                pkt[4:8] = int(t * 1000).to_bytes(4, "little")
+                tx.sendto(bytes(pkt), ("127.0.0.1", self.port))
+            else:
+                vals = demo_values(t)
+                vals["CarOrdinal"] = -2
+                vals["TimestampMS"] = int(t * 1000)
+                tx.sendto(build_packet(vals), ("127.0.0.1", self.port))
             nxt += 1 / 60
             self.stop_ev.wait(max(0.0, nxt - time.monotonic()))
 

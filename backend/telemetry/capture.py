@@ -82,6 +82,7 @@ def analyse_records(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
     fields_hist: dict[str, int] = {}
     race_off = 0
     last_accepted: Optional[bytes] = None
+    last_ts: Optional[int] = None
     gaps_ms: list[float] = []
     prev_t = None
     n = 0
@@ -92,17 +93,20 @@ def analyse_records(records: Iterable[dict[str, Any]]) -> dict[str, Any]:
         if prev_t is not None:
             gaps_ms.append(r["t_ms"] - prev_t)
         prev_t = r["t_ms"]
-        if r["outcome"] == "duplicates" and last_accepted is not None:
+        res = dec.decode(data)
+        ts = res.raw.get("TimestampMS") if res.ok else None
+        # every datagram whose timestamp equals the previous accepted one, whatever the
+        # policy did with it (rejected repeat, or accepted new content)
+        if last_accepted is not None and ts is not None and ts == last_ts and r["outcome"] in ("duplicates", "accepted"):
             kind = classify_equal(last_accepted, data)
             equal[kind] += 1
             if kind == "changed":
                 for f in changed_fields(last_accepted, data):
                     fields_hist[f] = fields_hist.get(f, 0) + 1
-            res = dec.decode(data)
-            if res.ok and res.raw.get("IsRaceOn") == 0:
+            if res.raw.get("IsRaceOn") == 0:
                 race_off += 1
         if r["outcome"] == "accepted":
-            last_accepted = data
+            last_accepted, last_ts = data, ts
     gaps_ms.sort()
     return {
         "datagrams": n,

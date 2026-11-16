@@ -143,11 +143,36 @@ def test_inputs_are_fractions():
     assert i["clutch"] == pytest.approx(0.2)
 
 
-def test_gear_zero_is_not_labelled_reverse_or_neutral():
+def test_gear_codes_from_real_observation_are_labelled_as_observations():
+    # P-3, real session 16 Nov 2026: 0 while reversing, 11 between gears during shifts.
     _, n, _, _ = full(packet(Gear=0))
-    assert n["gear"]["raw"] == 0
-    assert n["gear"]["label"] is None
-    assert n["gear"]["verified"] is False
+    assert n["gear"]["raw"] == 0 and n["gear"]["label"] == "R"
+    assert "observed" in n["gear"]["note"] and n["gear"]["verified"] is False
+    _, n, _, _ = full(packet(Gear=11))
+    assert n["gear"]["label"] == "N" and "shifts" in n["gear"]["note"]
+    _, n, _, _ = full(packet(Gear=12))
+    assert n["gear"]["label"] is None and n["gear"]["note"] is None
+    _, n, _, _ = full(packet(Gear=3))
+    assert n["gear"]["label"] == "3" and n["gear"]["note"] is None
+
+
+def test_empty_race_off_packet_is_not_shown_as_measured_zeros():
+    # Real FH6: IsRaceOn = 0 packets are all zero except TimestampMS.
+    from backend.telemetry.decode import decode, normalize
+
+    data = bytearray(324)
+    data[4:8] = (40147031).to_bytes(4, "little")
+    n, d, q = normalize(decode(bytes(data)).raw)
+    assert q["flags"] == ["empty_packet"] and q["fields"] == {}
+    assert n["race_on"] is False and n["timestamp_ms"] == 40147031
+    assert n["speed_mps"] is None and n["rpm"] is None and n["car"]["ordinal"] is None
+    assert n["wheels"]["fl"]["tire_temp"] is None and d["speed_kmh"] is None
+
+
+def test_race_off_with_real_values_is_not_empty():
+    _, n, _, q = full(packet(IsRaceOn=0, Speed=0.0))
+    assert "empty_packet" not in q["flags"]
+    assert n["speed_mps"] == 0.0 and n["race_on"] is False  # measured zero stays zero
 
 
 def test_unknown_enums_keep_code_without_label():

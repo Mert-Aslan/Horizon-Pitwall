@@ -22,8 +22,10 @@ monotonic time since the segment started; use this for intervals) and ``received
 
 Ordering policy for TimestampMS (u32, "can overflow to 0 eventually"):
   * newer                -> accepted
-  * equal                -> ``duplicates`` (rejected) unless equal_timestamp_policy is
-                            "accept_changed" and the documented bytes differ (D-1)
+  * equal                -> byte-identical / tail-only: ``duplicates`` (rejected). With new
+                            content (real data: 217/217 such packets during driving had
+                            28-49 changed fields) accepted under the default
+                            "accept_changed" policy; "reject" restores 0.2 behaviour (D-1)
   * wraparound           -> accepted (previous near 2^32, new near 0)
   * slightly older       -> out-of-order datagram, rejected (counts as reorder)
   * much older           -> reset *candidate*; only after RESET_CONFIRM consecutive,
@@ -97,7 +99,7 @@ class TelemetryHub:
         history_max_samples: int = 30_000,
         other_sources_cap: int = 16,
         other_sources_ttl_s: float = 600.0,
-        equal_timestamp_policy: str = "reject",
+        equal_timestamp_policy: str = "accept_changed",
         server_instance_id: Optional[str] = None,
         clock: Callable[[], float] = time.monotonic,
         wall: Callable[[], float] = time.time,
@@ -361,6 +363,9 @@ class TelemetryHub:
             self.counters["accepted_race_off"] += 1
         if raw.get("CarOrdinal") == 0:
             self.counters["accepted_car_ordinal_zero"] += 1
+        empty = "empty_packet" in quality["flags"]
+        if empty:
+            self.counters["accepted_empty"] += 1
         self.tail_values[tail_hex] += 1
         if len(self.tail_values) > 64:
             self.tail_values = Counter(dict(self.tail_values.most_common(32)))
@@ -439,6 +444,7 @@ class TelemetryHub:
                 "source": src,
                 "data": bytes(data),
                 "speed_kmh": derived["speed_kmh"],
+                "empty": empty,
                 "car_ordinal": car_identity["confirmed_ordinal"],
                 "car_status": car_identity["status"],
             }

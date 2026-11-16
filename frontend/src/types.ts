@@ -76,7 +76,7 @@ export interface Normalized {
   rpm: N;
   rpm_max: N;
   rpm_idle: N;
-  gear: { raw: N; label: string | null; verified: boolean };
+  gear: { raw: N; label: string | null; verified: boolean; note?: string | null };
   inputs: { throttle: N; brake: N; clutch: N; handbrake: N; steer: N };
   power_w: N;
   torque_nm: N;
@@ -188,6 +188,8 @@ export interface RecordingSummary {
   speed_kmh_mean: N;
   cars_confirmed: Record<string, number>;
   samples_without_confirmed_car: number;
+  /** packets with IsRaceOn = 0 and every value zero (0.3.1+) */
+  empty_samples?: number;
   gaps_over_250ms: number;
   gap_time_s: number;
   covered_s: number;

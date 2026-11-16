@@ -70,4 +70,6 @@ Testler: `tests/test_recorder.py` (çift başlat/durdur, eşzamanlı başlatma, 
 | 60 Hz, 90 s, kayıt açık + 4 istemci | 5400/5400 örnek, 0 düşen, kuyruk tepe 2, en yavaş chunk flush 10.8 ms, 0.69 MB |
 | 120 Hz, 150 s, kayıt açık + 2 istemci | 17 999 örnek, 0 düşen, kuyruk tepe 2, en yavaş flush 11.1 ms, 2.18 MB |
 
-Gerçek oyunla kayıt henüz yapılmadı.
+| **Gerçek oyun**, 16 Kasım 2026, 484 s | 25 703 örnek, 0 düşen, kuyruk tepe 1, en yavaş flush 13.6 ms, kapsama %100, `verify` geçti |
+
+0.3.1'den itibaren özet `empty_samples` (veri taşımayan boş paket sayısı) içerir; boş paketler hız istatistiğine girmez ama kayıtta saklanır (kayıpsız).

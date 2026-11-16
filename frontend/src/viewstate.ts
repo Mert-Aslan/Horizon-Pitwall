@@ -1,7 +1,7 @@
 // One UI state model derived from the server's status plus the link to the server.
 import type { Snapshot } from "./stream";
 
-export type ViewKind = "server_offline" | "starting" | "waiting" | "receiving" | "stale" | "error";
+export type ViewKind = "server_offline" | "starting" | "waiting" | "receiving" | "no_data" | "stale" | "error";
 
 export interface ViewState {
   kind: ViewKind;
@@ -18,6 +18,7 @@ const LABELS: Record<ViewKind, string> = {
   starting: "Starting receiver",
   waiting: "Waiting for data",
   receiving: "Receiving",
+  no_data: "No driving data",
   stale: "Data stale",
   error: "Receiver error",
 };
@@ -27,6 +28,7 @@ export function deriveView(s: Snapshot): ViewState {
   let kind: ViewKind;
   if (s.link !== "open" || !s.status) kind = "server_offline";
   else kind = s.status.connection_state;
+  if (kind === "receiving" && s.telemetryEmpty) kind = "no_data";
   const demo = (s.status?.mode ?? s.frame?.mode) === "demo";
   return {
     kind,

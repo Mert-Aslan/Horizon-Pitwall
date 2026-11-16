@@ -204,6 +204,7 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
               ["Stream segments", d.segments],
               ["Data coverage", s?.coverage !== null && s?.coverage !== undefined ? `${fmt(s.coverage * 100, 1)} %` : "—"],
               ["Gaps over 250 ms", s ? `${s.gaps_over_250ms} (${fmt(s.gap_time_s, 1)} s)` : "—"],
+              ["Packets without driving data", s?.empty_samples !== undefined ? s.empty_samples.toLocaleString() : "not counted (older recording)"],
               ["Top speed", s?.speed_kmh_max !== null && s?.speed_kmh_max !== undefined ? `${fmt(s.speed_kmh_max, 1)} km/h` : "—"],
               ["Average speed", s?.speed_kmh_mean !== null && s?.speed_kmh_mean !== undefined ? `${fmt(s.speed_kmh_mean, 1)} km/h` : "—"],
               ["Cars (confirmed id: samples)", cars.length ? cars.map(([k, v]) => `#${k}: ${v}`).join(", ") : "none confirmed"],

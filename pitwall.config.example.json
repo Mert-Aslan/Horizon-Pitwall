@@ -11,7 +11,7 @@
   "raw_rate_hz": 4,
   "data_dir": "",
   "log_level": "INFO",
-  "equal_timestamp_policy": "reject",
+  "equal_timestamp_policy": "accept_changed",
   "recorder_queue_size": 20000,
   "diagnostic_capture_max_mb": 16
 }

@@ -204,6 +204,10 @@ main:focus {
 .conn-receiving .conn-mark {
   background: var(--success);
 }
+.conn-no_data .conn-mark {
+  background: transparent;
+  border: 2px solid var(--success);
+}
 .conn-stale .conn-mark {
   background: transparent;
   border: 2px solid var(--accent);

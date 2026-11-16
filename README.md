@@ -4,7 +4,7 @@
 
 > Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
 
-Sürüm 0.3.0: veri doğruluğu, Live kokpit ve **manuel sürüş kaydı** (Sessions). Replay ve analiz henüz yok. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Sürüm 0.3.1: veri doğruluğu, Live kokpit ve **manuel sürüş kaydı** (Sessions); gerçek FH6 oturumuyla doğrulandı. Replay ve analiz henüz yok. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
 
@@ -119,6 +119,7 @@ npm run build                                  # frontend/dist (backend bunu ser
 | "Packets … do not match the FH6 format" | Gönderen FH6 değil (ör. Forza Motorsport "sled/dash"), ya da başka bir uygulama aynı porta yazıyor. Diagnostics → *Lengths seen*. |
 | "A second sender is transmitting" | Aynı porta iki kaynak gönderiyor; ilk kaynak susana kadar (3 s) ikincisi yok sayılır. |
 | "Data stale" | Oyun menüde/pause/rewind/replay'de. Son değerler soluk ve yaşıyla gösterilir. |
+| "No driving data" | Oyun paket gönderiyor ama içleri boş (IsRaceOn = 0, tüm değerler 0) — sürüş dışındaki bazı anlarda olur. Son gerçek değerler soluk gösterilir; sürüşe dönünce kendiliğinden düzelir. |
 | "Recording stopped: …" | Kayıt diske yazılamadı (ör. disk dolu). Canlı görünüm çalışmaya devam eder; o ana kadar kaydedilen kısım Sessions'ta. |
 | "The Pitwall server now serves a newer version of this page" | Arayüz yeniden derlendi; sayfayı yenileyin. |
 | Web portu dolu | Başlangıçta açık hata verir; `--web-port 8081`. |

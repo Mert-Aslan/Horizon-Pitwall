@@ -71,7 +71,20 @@ def test_equal_timestamp_classification():
     assert classify_equal(packet(TimestampMS=5, Speed=math.nan), packet(TimestampMS=5, Speed=math.nan)) == "identical"
 
 
-def test_default_policy_rejects_changed_equal_timestamp(hub, clock):
+def test_default_policy_accepts_new_content_but_not_repeats(hub, clock):
+    # D-1 decision from real data: 217/217 equal-timestamp packets during driving carried
+    # new content; 6402/6402 repeats outside driving were byte-identical.
+    assert hub.equal_timestamp_policy == "accept_changed"
+    feed(hub, clock, 100, Speed=25.0)
+    assert feed(hub, clock, 100, Speed=25.0) == "duplicates"
+    assert feed(hub, clock, 100, Speed=26.4) == "accepted"
+    assert hub.latest()["frame"]["normalized"]["speed_mps"] == pytest.approx(26.4)
+    d = hub.diagnostics()["duplicate_analysis"]
+    assert d["identical"] == 1 and d["changed"] == 1 and d["accepted_under_policy"] == 1
+
+
+def test_reject_policy_keeps_02_behaviour(clock):
+    hub = TelemetryHub(clock=clock, equal_timestamp_policy="reject")
     feed(hub, clock, 100, Speed=25.0)
     assert feed(hub, clock, 100, Speed=26.4) == "duplicates"
     assert hub.latest()["frame"]["normalized"]["speed_mps"] == 25.0

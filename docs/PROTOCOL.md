@@ -20,12 +20,13 @@ Kaynak: Forza Support, *Forza Horizon 6 "Data Out" Documentation* —
 |---|---|---|
 | P-1 | 88 alan tipler arka arkaya (hizalama boşluğu olmadan) dizilince 323. byte'ta biter. Belgedeki 324. byte **belgelenmemiş opak kuyruk** olarak saklanır (`quality.tail_hex`, Diagnostics → *Trailing byte*). Yalnız **324 byte** kabul edilir; 323 byte'lık paket `length_323_undocumented` nedeniyle reddedilir. | Belge 324 diyor; 323'ü kabul etmek doğrulanmamış bir formatı canlı veriye çevirmek olur. Önceki Forza Horizon sürümlerinde de son byte dolgu olarak gözlenmişti; bu bir ipucu, kanıt değil. |
 | P-2 | Byte sırası **little-endian varsayılır.** | Belge belirtmiyor. Windows/x64 oyun ve önceki tüm Forza başlıkları little-endian. Test `test_little_endian_is_used` varsayımı sabitler; gerçek yakalama doğrulayacak. |
-| P-3 | `Gear` ham değeri korunur. 1–10 numarasıyla gösterilir; **0 "R/N code, unverified"** olarak ham gösterilir, R veya N denmez. Diğer değerler "unrecognised gear code". | Belge yalnız "Current gear" diyor. |
+| P-3 | `Gear` ham değeri korunur. 1–10 numarasıyla gösterilir. **0 → "R"**, **11 → "N"** (vites arası); ikisi de belgelenmemiş, gerçek gözleme dayalı etiket olarak notuyla gösterilir (`gear.note`, `verified: false`). Diğer değerler "unrecognised gear code". | Belge yalnız "Current gear" diyor. Gerçek oturum (16 Kasım 2026, 24 285 sürüş örneği): geri giden her örnekte (107/107) vites 0; 11 yalnız vites değişimlerinin ortasında (3→11→2, 2→11→3 …), hızda ve gaz/frenle. Tek araç, tek oturum. |
 | P-4 | Lastik sıcaklığı **birimsiz, dönüştürülmeden** gösterilir; arayüz "temperature unit not documented by the game" yazar. | Belge yalnız "Tire temperature" diyor. Celsius/Fahrenheit dönüşümü uydurulmaz. |
 | P-5 | `CarClass` harfleri C/B/A/S1/S2/R gelenekten gelir; belge yalnız 0 = D ve 7 = X'i adlandırır. Aralık dışı kodlar etiketsiz kalır ve işaretlenir. | |
 | P-6 | `Steer` −128 temsil edilebilir ama belge dışıdır: ham −128 korunur, normalize değer −1'e sınırlanır, `out_of_range` işaretlenir. Aynı kural `NormalizedDrivingLine` ve `NormalizedAIBrakeDifference` için geçerlidir. | Eski prototip −100.787 % üretiyordu. |
 | P-7 | Belgelenmiş aralık dışındaki değerler (PI, CarClass, Drivetrain, Fuel, süspansiyon, 0/1 bayraklar) atılmaz; normalize katmanda tutulur (enum'larda etiket `null`) ve `quality.fields` içinde `out_of_range` olarak işaretlenir. Negatif güç/tork fiziksel olarak mümkündür ve işaretlenmez. | |
 | P-8 | Tur süresi 0.0 → normalize değer `null`, kalite `not_applicable`. Ölçülmüş sıfır hız 0.0 kalır. NaN/±Inf → `null` + `non_finite`; bağımlı türetilmiş değerler de `null` olur. | Eski `or 0` zincirlerinin yerine. |
+| P-9 | **Boş paket:** `IsRaceOn = 0` ve `TimestampMS` dışındaki tüm alanlar 0 ise paket kabul edilir (bağlantı canlı, sıra korunur, kayda girer) ama veri taşımaz: normalize/türetilmiş değerler `null`, kalite bayrağı `empty_packet`, sayaç `accepted_empty`. Arayüz "No driving data" gösterir ve son gerçek değerleri soluk tutar; özetlerde hız ortalamasına girmez. | Gerçek oturumda `IsRaceOn = 0` olan 1418/1418 paketin 8–322. byte'ları tamamen sıfırdı (hız 0, devir 0, max devir 0). Bunları ölçülmüş sıfır göstermek yanlış olurdu. Algılama byte içeriğine dayanır; `IsRaceOn` tek başına yeterli sayılmaz. |
 
 ## Zaman damgası, sıra ve oturum
 
@@ -57,9 +58,21 @@ Ayrıca `traffic_warning`: son 2 s içinde reddedilen paket var ve durum `receiv
 
 `fixtures/synthetic/` — tamamı sentetik, `tools/make_fixtures.py` ile üretilir; paketler `tests/packets.py` içindeki elle yazılmış `struct.pack_into` offset'leriyle yazılır (şema modülünden bağımsız). `CarOrdinal` daima negatiftir; gerçek bir araç ID'si gibi kataloglanamaz. `manifest.json` her dosyanın beklenen sonucunu içerir.
 
-**Gerçek oyun yakalaması (fixture) henüz yok** (`real-game validation pending`). Yakalama aracı artık uygulamanın içinde (Diagnostics → *Diagnostic capture*); kişisel veri içermeyen kısa bir parça `fixtures/real/` altına manifest notuyla eklenecek.
+`fixtures/real/` — **gerçek oyun byte'ları** (16 Kasım 2026 kaydından 7 datagram, `manifest.json` kaynağı ve beklentileri yazar). Yalnız araç telemetrisi içerir; ad veya ağ adresi yok. Eşit zaman damgalı değişen içerik için gerçek fixture henüz yok (Diagnostics → *Diagnostic capture* ile alınabilir).
 
-### Pasif gözlem — 16 Kasım 2026 (yalnız okuma)
+### Gerçek oturum — 16 Kasım 2026, 0.3.0 (kullanıcının kaydı + sayaçlar, yalnız okuma)
+
+Kayıt `20261116T192643Z-e26480`: 484 s, 25 703 örnek, 0 düşen, kapsama %100, dosya doğrulaması geçti. Bulgular (ayrıntı yukarıda ve kararlarda):
+
+- Uzunluk her zaman 324, 324. byte her zaman `00` (P-1: dolgu byte'ı olarak güçlü kanıt).
+- Little-endian okumayla değerler fiziksel olarak tutarlı: PI 999, sınıf 7 (X), AWD, max devir 11 000, tepe hız 316.5 km/h (P-2: güçlü kanıt).
+- Direksiyon uçları −127 / 127; −128 hiç görülmedi (P-6).
+- Gaz/fren 0–255 tam aralık; debriyaj sürüş boyunca 0 (otomatik vites olabilir; doğrulanmadı).
+- Lastik sıcaklığı sürüşte 94–300 aralığında. Fahrenheit ile uyumlu görünüyor (≈ 34–149 °C) ama birim hâlâ belgelenmedi; dönüşüm yapılmıyor (P-4).
+- Serbest sürüşte tur alanları 0 (P-8 ile tutarlı); NaN/Inf hiç yok.
+- Gerçek byte'lardan regresyon fixture'ları: `fixtures/real/` (boş paket, geri vites, vites arası, ileri vites, tam fren, direksiyon iki uç; `tools/extract_real_fixture.py`, `tests/test_real_fixtures.py`).
+
+### Pasif gözlem — 16 Kasım 2026, 0.2.0 (yalnız okuma)
 
 Kullanıcının 8080'de canlı modda çalışan örneğinden, durumuna dokunmadan `GET /api/v1/diagnostics` ve `/telemetry/latest` okundu. Bu kontrollü bir doğrulama oturumu değil; kanıt niteliği sınırlı:
 
@@ -67,14 +80,12 @@ Kullanıcının 8080'de canlı modda çalışan örneğinden, durumuna dokunmada
 - Değerler little-endian okumayla tutarlı ve makul (ör. `EngineMaxRpm` 9999.995, `EngineIdleRpm` 799.9995, `Speed` 39.5 m/s, `Steer` 127 tam sağda, PI 916, `CarClass` 6) — P-2 için işaret.
 - Gönderen kaynak portu `5200` (belgedeki "oyun 5200–5300 arasında kendi soketini açar" ile tutarlı); gözlenen hız ~50 Hz, `TimestampMS` ortalama aralığı ~21.7 ms.
 - Lastik sıcaklıkları sürüşte ~98–210 aralığında görüldü. Bu Fahrenheit ile uyumlu olabilir, ama birim **hâlâ doğrulanmadı**; dönüşüm yapılmıyor (P-4).
-- **Açık bulgu D-1:** ilk okumada paketlerin ~%12'si (66 611'in 8 175'i) bir önceki kabul edilen paketle **aynı `TimestampMS`** taşıdığı için `duplicates` olarak reddedilmişti. Aynı oturumun ikinci okumasında (2 710 s, 160 848 paket) oran **%5.4**'e (8 672) inmişti: tekrarların neredeyse tamamı oturumun ilk dakikalarında birikmiş, sonra ~500 eklenmiş. Yani sürekli değil, belli durumlarda yoğunlaşıyor. O sürümün sayaçları içeriğin aynı olup olmadığını söyleyemiyordu.
-  - **Ölçüm (0.3.0):** her eşit zaman damgalı paket son kabul edilen paketle karşılaştırılır ve dört sınıftan birine girer: `identical` (byte byte aynı), `tail_only` (belgelenmiş 323 byte aynı, yalnız 324. byte farklı), `non_finite` (farklar yalnız NaN/Inf alanlarda), `changed` (en az bir sonlu alan farklı). Ayrıca tekrar anındaki `IsRaceOn`, değişen alanların sıklığı ve 5 örnek tutulur. Diagnostics → Packets ve `GET /api/v1/diagnostics` → `duplicate_analysis`.
-  - **Tanılama yakalaması:** Diagnostics → *Diagnostic capture* (30/60 s, boyut sınırlı) her datagram'ı alım sırası, monotonic süre, kaynak (isteğe bağlı maskeli), sonuç ve ham byte'larıyla `<data_dir>/captures/` altına yazar ve aynı sınıflandırmayla özet çıkarır. Mevcut ingest zincirine bağlanır; oyun portuna ikinci bir soket bağlanmaz.
-  - **Politika:** `equal_timestamp_policy` = `reject` (varsayılan, değişmedi) veya `accept_changed` (yalnız `changed`/`non_finite` sınıfı kabul edilir; `identical`/`tail_only` hâlâ tekrar). `accept_changed` modunda Δt = 0 hız/boşluk tahminine girmez (sıfıra bölme yok) ve alım sırası uygulamanın `sequence`'i ile ayrılır; aynı ms içindeki iki örneğin oyun içi sırası kesin sayılmaz. Testler: `tests/test_segments.py`.
-  - **Karar kuralı:** gerçek yakalamada `changed ≈ 0` ise tekrarlar gerçekten aynı paket, reddetmek kayıpsız. `changed` belirginse varsayılan `accept_changed` yapılır ve yakalamadan çıkarılan bir fixture ile sabitlenir. **Durum: gerçek veri bekleniyor** — kullanıcının 8080'de çalışan örneği 0.2.0 kodunu çalıştırıyor (16 Kasım 2026 21:2x'te okundu; yeni sayaçlar yok).
-- **Bulgu D-2:** 40 `car_change` olayının çoğu `4156 → 0 → 4156` biçimindeydi; sonra `0 → 2010 → 0` da görüldü (ikinci araçta da). Zaman zaman `CarOrdinal = 0` taşıyan geçerli paketler geliyor; anlamı belgelenmemiş (menü/yükleme anları olabilir, doğrulanmadı).
-  - **Model (0.3.0):** ham ordinal hiç değiştirilmez. `car_identity` durumları: `unknown`, `candidate` (yeni sıfırdan farklı değer gözleniyor), `confirmed` (en az 20 ardışık örnek **ve** 0.3 s), `temporarily_unavailable` (0/None geliyor; son onaylı kimlik korunur ama "canlı doğrulanmadı" diye işaretlenir), `unavailable` (10 s'den uzun 0). Yalnız onaylı A → B `car_change` olayı üretir; ilk onay `car_identified`, uzun yokluk bir kez `car_unavailable`. Eşikler sentetik fixture'larla seçildi ve geçicidir; gerçek yakalamayla gözden geçirilecek. Testler: geçici 0, gerçek A→B, iki araç arasında titreme, uzun bilinmeyen (`tests/test_segments.py`).
-  - 0'ın anlamı tüm oyun sürümleri için sabitlenmedi; `IsRaceOn` ile ilişkisi `accepted_race_off` / `accepted_car_ordinal_zero` sayaçları ve yakalamalarla incelenecek.
+- **D-1 — karar verildi (0.3.1):** 0.2.0 sürümünde paketlerin %5.4–12'si aynı `TimestampMS` yüzünden reddediliyordu. 0.3.0 sayaçlarıyla gerçek oturum (16 Kasım 2026, 1 847 s, 105 059 paket) şunu gösterdi:
+  - 6 619 eşit zaman damgalı paketin **6 402'si byte byte aynı** ve **hepsi `IsRaceOn = 0`** iken (boş paketlerin tekrarı, P-9);
+  - **217'si yeni içerik** ve **hepsi `IsRaceOn = 1`** iken: her birinde 28–49 alan farklı (hız 39.84 → 39.92 m/s, devir, ivme, hız vektörü, açısal hız, süspansiyon, slip). Yani sürüş sırasında oyun bazen yeni fizik karesini önceki zaman damgasıyla gönderiyor; `tail_only` ve `non_finite` sınıfı 0.
+  - **Karar:** varsayılan `equal_timestamp_policy = accept_changed`. Aynı byte'lar yine tekrar sayılır ve reddedilir; yeni içerik kabul edilir. Δt = 0 hız/boşluk tahminine girmez; alım sırası uygulamanın `sequence`'i (kayıtta `i`) ile korunur. Aynı ms'deki iki karenin oyun içi sırası kesin sayılmaz. `reject` ile 0.3.0 davranışı geri alınabilir. Testler: `test_segments.py`; gerçek byte'larla değişen içerik fixture'ı henüz yok (o anların yakalaması alınmadı; 5 örnekteki alan listeleri yukarıdaki sonucun kaynağı).
+  - Kayıttaki zaman damgası adımları: 16/15 ms (%79), 31/32 ms (%20), 47/63 ms (7 kez); ortalama alım ~53 Hz, oyunun adımı ~64 Hz.
+- **D-2 — açıklandı (0.3.1):** `CarOrdinal = 0` yalnız boş paketlerde görülüyor. Kayıtta 1418/1418 `IsRaceOn = 0` paketinin ordinal'i 0, 24 285 sürüş paketinin hepsi gerçek araç kimliği taşıyor; 30 dakikalık sayaçlarda da `accepted_car_ordinal_zero` = `accepted_race_off` = 35 255. 0.3.0'daki `car_identity` modeli bu oturumda yalnız **bir** araç değişimi olayı üretti (`2010 → 4210`, kullanıcının gerçek araç değişimi); 0.2.0 benzer bir oturumda 40 sahte olay üretmişti. Boş paketler 10 s'den uzun sürünce bir kez `car_unavailable` yazılır. Eşikler (20 örnek + 0.3 s onay, 10 s) şimdilik değişmedi.
 
 ## Gerçek oyunla doğrulama listesi
 

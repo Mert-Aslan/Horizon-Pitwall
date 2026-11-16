@@ -123,7 +123,41 @@ def _mul(a: Optional[float], k: float) -> Optional[float]:
     return None if a is None else a * k
 
 
+# Gear codes outside 1..10 seen in real FH6 data (16 Nov 2026, one session, one AWD car):
+# 0 on every sample moving backwards (107/107), 11 only in the middle of gear changes
+# (3->11->2, 2->11->3 ...). Not documented by the game; labelled as observations.
+OBSERVED_GEAR_CODES = {
+    0: ("R", "reverse (code 0; observed, not documented)"),
+    11: ("N", "between gears (code 11; observed during shifts, not documented)"),
+}
+
+
+def is_empty_packet(raw: dict[str, Any]) -> bool:
+    """Real FH6 sends packets with IsRaceOn = 0 in which every other field except
+    TimestampMS is zero (1418/1418 IsRaceOn = 0 packets in a 484 s recording). They carry
+    no driving data; showing them as measured zeros (0 km/h, 0 rpm, max rpm 0) would be
+    false. Detected from the bytes' meaning, not from IsRaceOn alone."""
+    if raw.get("IsRaceOn") != 0:
+        return False
+    return all(v == 0 for k, v in raw.items() if k not in ("IsRaceOn", "TimestampMS"))
+
+
+def _null_tree(d: dict) -> dict:
+    return {k: (_null_tree(v) if isinstance(v, dict) else None) for k, v in d.items()}
+
+
 def normalize(raw: dict[str, Any]) -> tuple[dict, dict, dict]:
+    if is_empty_packet(raw):
+        n, d, _ = _normalize(raw)
+        n = _null_tree(n)
+        n["race_on"] = False
+        n["timestamp_ms"] = raw.get("TimestampMS")
+        n["gear"]["verified"] = False
+        return n, _null_tree(d), {"fields": {}, "invalid_field_count": 0, "flags": ["empty_packet"]}
+    return _normalize(raw)
+
+
+def _normalize(raw: dict[str, Any]) -> tuple[dict, dict, dict]:
     q = _Q()
     f = lambda n: _finite(raw, n, q)  # noqa: E731
 
@@ -162,10 +196,11 @@ def normalize(raw: dict[str, Any]) -> tuple[dict, dict, dict]:
         "rpm_idle": rpm_idle,
         "gear": {
             "raw": gear_raw,
-            # Forward gears 1..10 are presented by number; 0 is reported as a raw code
-            # because reverse/neutral encoding is unverified (P-3).
-            "label": str(int(gear_raw)) if gear_raw is not None and 1 <= gear_raw <= 10 else None,
-            "verified": False,
+            # Forward gears 1..10 by number; 0 and 11 from real observation (P-3).
+            "label": (str(int(gear_raw)) if gear_raw is not None and 1 <= gear_raw <= 10
+                      else OBSERVED_GEAR_CODES[int(gear_raw)][0] if gear_raw in OBSERVED_GEAR_CODES else None),
+            "note": OBSERVED_GEAR_CODES[int(gear_raw)][1] if gear_raw in OBSERVED_GEAR_CODES else None,
+            "verified": False,  # never documented by the game
         },
         "inputs": {
             "throttle": _byte_fraction(raw, "Accel", q),

@@ -1,14 +1,14 @@
 # Uygulama durumu
 
-Son güncelleme: 16 Kasım 2026 · **Sürüm 0.3.0** (backend `APP_VERSION` 0.3.0, frontend `package.json` 0.3.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
+Son güncelleme: 16 Kasım 2026 · **Sürüm 0.3.1** (backend `APP_VERSION` 0.3.1, frontend `package.json` 0.3.1, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
 
 ## Güncel durum
 
 | Milestone | Durum | Not |
 |---|---|---|
 | Faz 0–2 (0.2.0) | ✅ | veri doğruluğu, Live kokpit, Diagnostics; aşağıda "Geçmiş" |
-| **M1** akış/config/segment + tanılama yakalaması + build kimliği | ✅ kod ve testler | D-1/D-2 için mekanizma ve politika hazır; **gerçek oyun kararı bekliyor** |
-| **M2** manuel kayıt + Sessions + kurtarma | ✅ uçtan uca | gerçek oyunla kayıt henüz yapılmadı |
+| **M1** akış/config/segment + tanılama yakalaması + build kimliği | ✅ | D-1 ve D-2 **gerçek veriyle karara bağlandı** (0.3.1) |
+| **M2** manuel kayıt + Sessions + kurtarma | ✅ | **gerçek oyunla doğrulandı**: 484 s, 25 703 örnek, 0 düşen, dosya kontrolü geçti |
 | M3 istemciye özel replay | ⏳ başlanmadı | Sessions'ta replay düğmesi bilinçli olarak yok |
 | M4–M6 | ⏳ | |
 
@@ -30,7 +30,24 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 
 **Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. Baseline commit `716cbc5` üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
 
-### Yeni: akış kontrolü (bu turda bulunan sorun)
+### 0.3.1 — gerçek oyun oturumunun sonuçları (16 Kasım 2026)
+
+Kullanıcı 0.3.0'ı başlatıp sürdü ve bir kayıt aldı; sayaçlar `GET` ile, kayıt dosyaları salt okunur açılarak incelendi.
+
+| Konu | Sonuç | Değişiklik |
+|---|---|---|
+| D-1 eşit zaman damgası | 6 402 aynı byte (hepsi IsRaceOn 0) / 217 yeni içerik (hepsi sürüşte, 28–49 alan farklı) | varsayılan `accept_changed`; aynı byte'lar yine reddedilir |
+| Boş paketler (yeni bulgu) | IsRaceOn 0 paketlerinin 1418/1418'i TimestampMS dışında tamamen sıfır | P-9: kabul edilir ama veri taşımaz (`empty_packet`); arayüz "No driving data", son değerler soluk; kayıt özetinde ayrı sayılır |
+| D-2 ordinal 0 | yalnız boş paketlerde; 24 285 sürüş örneğinin hepsinde gerçek kimlik | model doğrulandı: tek gerçek araç değişimi olayı (2010 → 4210) |
+| P-3 vites | 0 = geri (107/107), 11 = vites arası | "R" / "N" + gözlem notu |
+| P-1, P-2, P-6 | 324 byte, kuyruk `00`; little-endian tutarlı; direksiyon ±127 | güçlü kanıt; gerçek fixture testleri |
+| P-4 lastik sıcaklığı | 94–300 (birim belgelenmedi) | değişiklik yok |
+| Kayıt | 484 s, 25 703 örnek, 0 düşen, kuyruk tepe 1, en yavaş flush 13.6 ms, kapsama %100, `verify` OK | — |
+| Akış kontrolü (gerçek tarayıcı, 30 dk) | 47 272 frame gönderildi, `flow_withheld_frames` 0, yavaş gönderim 0 | — |
+
+Not: bu kaydın özeti 0.3.0 ile hesaplandı; boş paketleri 0 km/h saydığı için ortalama hız (223.3 km/h) olduğundan biraz düşük. 0.3.1 sonrası kayıtlarda boş paketler hız istatistiğine girmez.
+
+### Akış kontrolü (0.3.0'da bulunan sorun)
 
 Yük testindeki yavaş istemci (5 mesaj/s okuyan) **29.6 s (p50) / 50.6 s (max)** eski veri görüyordu: işletim sisteminin TCP tamponları birikmeyi sunucudan saklıyor. Çözüm: istemci onaylı pencere (6 mesaj, her 2 mesajda `ack`). Sonra: yavaş istemci p50 **1.3 s**, max 1.45 s; normal istemciler değişmedi (30.7 frame/s, p95 1.6 ms). Eski istemciler onay göndermez ve eskisi gibi çalışır. Ayrıntı: [ARCHITECTURE.md](ARCHITECTURE.md#yayın-modeli-akış-kontrolü-ve-ölçüler).
 
@@ -38,10 +55,10 @@ Yük testindeki yavaş istemci (5 mesaj/s okuyan) **29.6 s (p50) / 50.6 s (max)*
 
 | Komut | Sonuç |
 |---|---|
-| `python -m pytest` | **181 passed** (decoder/şema 81, hub 15, segment/D-1/D-2/sınırlar 15, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, fixture 11 — parametrik testler ayrı sayılır) |
-| `cd frontend; npm test` (vitest) | **32 passed** (20 mantık + 12 akış istemcisi: F-01, F-03, yaşam döngüsü, akış kontrolü, doğrulama) |
+| `python -m pytest` | **195 passed** (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
+| `cd frontend; npm test` (vitest) | **35 passed** (21 mantık + 14 akış istemcisi: F-01, F-03, boş paketler, yaşam döngüsü, akış kontrolü, doğrulama) |
 | `npx tsc --noEmit`, `npm run build` | temiz; build `dist/build-manifest.json` üretir |
-| `python tools/ui_smoke.py` | **61/61** gerçek tarayıcı kontrolü (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
+| `python tools/ui_smoke.py` | **65/65** gerçek tarayıcı kontrolü (0.3.1: boş paketlerde "No driving data", son değerlerin soluk kalması, açıklama banner'ı, veri dönünce Receiving) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
 | `tools/repro_close_reset.py` | 10 RST → 0 traceback (0.2.0 ve 0.3.0 backend) |
 
 Smoke testine eklenenler: rAF askıdayken veri gelirken yeniden bağlanma olmaması, sayfa tekrar görünür olunca Receiving, Record/Stop'un sunucu durumunu yansıtması, kayıt süresi/örnek sayısı, Sessions listesi/detay/kaydedilen örnek/dosya bütünlüğü/etiket kaydetme/hız özeti, Sessions'ta 390 px taşma yok, **sayfa kapalıyken kaydın sürmesi** (127 örnek) ve yeniden açılan sayfanın kaydı göstermesi, Diagnostics'ten yakalama ve özeti, yeniden başlayan sunucunun yeni instance kimliği, aynı bundle'da sahte "yeni UI" uyarısı olmaması.
@@ -65,21 +82,23 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 
 | Konu | Pasif gözlem (16 Kasım 2026) | Kontrollü doğrulama |
 |---|---|---|
-| 324 byte, 324. byte = `00` (P-1) | 160 848 paket, hepsi 324; kabul edilenlerin hepsinde `00` | bekliyor |
-| Little-endian (P-2) | değerler makul | bekliyor |
-| Vites kodları (P-3), steer uçları (P-6), lastik sıcaklık birimi (P-4) | — / 127 görüldü / ~98–210 (birim bilinmiyor) | bekliyor |
-| Eşit zaman damgası (D-1) | %5.4 tekrar, başlangıçta yoğun | yeni sayaçlar/yakalama ile bekliyor |
-| `CarOrdinal = 0` (D-2) | 4156→0→4156 ve 0→2010→0 desenleri | bekliyor |
-| Menü/pause/rewind davranışı | stale doğru görüldü (0.2.0) | bekliyor |
-| Kayıt | — | gerçek oyunla yapılmadı |
+| 324 byte, 324. byte = `00` (P-1) | 160 848 paket, hepsi 324; kabul edilenlerin hepsinde `00` | 105 059 + kayıt: aynı; gerçek fixture testi |
+| Little-endian (P-2) | değerler makul | gerçek fixture'da elle yazılmış offset'lerle doğrulandı |
+| Vites kodları (P-3), steer uçları (P-6), lastik sıcaklık birimi (P-4) | — / 127 görüldü / ~98–210 (birim bilinmiyor) | 0 = R, 11 = N (gözlem) / ±127 / 94–300, birim hâlâ belgesiz |
+| Eşit zaman damgası (D-1) | %5.4 tekrar, başlangıçta yoğun | **karar verildi** (0.3.1, yukarıda) |
+| `CarOrdinal = 0` (D-2) | 4156→0→4156 ve 0→2010→0 desenleri | **açıklandı**: yalnız boş paketler |
+| Boş paketler (P-9) | — | 1418/1418, karar verildi |
+| Menü/pause/rewind davranışı | stale doğru görüldü (0.2.0) | hangi ekranın boş paket, hangisinin sessizlik ürettiği ayrıca eşlenmedi |
+| Kayıt | — | **gerçek oyunla doğrulandı** |
 
 ## Sıradaki tek somut iş
 
-**Gerçek oyunla kısa bir doğrulama oturumu (kullanıcı gerektirir):** 0.3.0'ı başlat, Diagnostics → *Capture 60 s* sırasında sür ve bir kez menüye gir, sonra 2–3 dakikalık bir kayıt al. Bu tek oturum D-1 politikasını (`changed` oranı), D-2 eşiklerini ve kaydın gerçek veriyle bütünlüğünü sonuçlandırır; yakalamadan küçük bir `fixtures/real/` fixture'ı çıkarılır. Ardından M3 (istemciye özel replay: kayıt `el` zaman tabanı, `iter_lines` aralık okuması, seek için generation id).
+**M3 — istemciye özel replay:** Sessions'tan bir kaydı açıp oynatma/duraklatma/0.5–2× hız/sarma; zaman tabanı kayıttaki `el`, veri `Store.iter_lines` aralık okumasıyla sınırlı parçalar halinde; seek için generation id; canlı akış ve süren kayıt etkilenmez; boş paket aralıkları ve boşluklar görünür kalır.
 
 ## Açık işler
 
-- D-1/D-2 kararları ve eşikler: gerçek yakalama gerekli (mekanizma hazır).
+- Eşit zaman damgalı yeni içerik için gerçek byte fixture'ı (bir *Diagnostic capture* yeterli); araç kimliği eşiklerinin farklı araçlarla gözden geçirilmesi.
+- Hangi oyun ekranının boş paket, hangisinin hiç paket göndermediği (menü/pause/fotoğraf modu/yükleme) eşlenmedi.
 - WinError 10054 tetikleyicisi yeniden üretilemedi.
 - RSS eğilimi için uzun soak.
 - Masaüstü tarayıcıda gerçek simge durumu/arka plan testi (headless sınırı).

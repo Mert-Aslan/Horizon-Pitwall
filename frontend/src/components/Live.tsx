@@ -37,7 +37,7 @@ export function ShiftBand({ frame }: { frame: Frame | null }) {
 }
 
 function Cluster({ frame }: { frame: Frame | null }) {
-  const g = gearText(frame?.normalized.gear.raw, frame?.normalized.gear.label);
+  const g = gearText(frame?.normalized.gear.raw, frame?.normalized.gear.label, frame?.normalized.gear.note);
   return (
     <section className="panel cluster" aria-label="Gear and speed">
       <div className="gear-box">

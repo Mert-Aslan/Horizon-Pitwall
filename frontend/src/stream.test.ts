@@ -232,6 +232,38 @@ describe("lifecycle", () => {
   });
 });
 
+describe("empty game packets", () => {
+  const emptyMsg = (seq: number) => {
+    const m = frameMsg("i1", "A", seq, 0);
+    (m.frame as Record<string, unknown>).quality = { fields: {}, flags: ["empty_packet"] };
+    (m.frame as { derived: { speed_kmh: number | null } }).derived.speed_kmh = null;
+    return m;
+  };
+  it("keep the last real frame on screen and mark the stream as empty", () => {
+    const { env, store } = setup();
+    env.ws.recv(frameMsg("i1", "A", 1, 120));
+    env.ws.recv(emptyMsg(2));
+    env.flushRaf();
+    const s = store.getSnapshot();
+    expect(s.telemetryEmpty).toBe(true);
+    expect(s.frame?.sequence).toBe(1);
+    expect(store.history.last()?.speed).toBeNull(); // the trace shows the gap
+    env.ws.recv(frameMsg("i1", "A", 3, 90));
+    env.flushRaf();
+    expect(store.getSnapshot().telemetryEmpty).toBe(false);
+    expect(store.getSnapshot().frame?.sequence).toBe(3);
+  });
+  it("an empty first frame of a new stream is shown as-is (no borrowed values)", () => {
+    const { env, store } = setup();
+    env.ws.recv(frameMsg("i1", "A", 1, 120));
+    const m = emptyMsg(1);
+    (m.frame as Record<string, unknown>).stream_segment_id = "B";
+    env.ws.recv(m);
+    env.flushRaf();
+    expect(store.getSnapshot().frame?.stream_segment_id).toBe("B");
+  });
+});
+
 describe("flow control", () => {
   it("opts in when the server offers it and acks on receipt, even with rAF paused", () => {
     const env = new FakeEnv();

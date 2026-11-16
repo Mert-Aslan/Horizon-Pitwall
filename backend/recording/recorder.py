@@ -75,12 +75,15 @@ class _Summary:
         self.speed_n = 0
         self.cars: dict[str, int] = {}
         self.unverified_car_samples = 0
+        self.empty_samples = 0
         self.gap_count = 0
         self.gap_time_s = 0.0
         self.last_el: Optional[float] = None
         self.first_el: Optional[float] = None
 
     def add(self, s: dict, el: float) -> None:
+        if s.get("empty"):
+            self.empty_samples += 1
         v = s.get("speed_kmh")
         if isinstance(v, (int, float)) and math.isfinite(v):
             self.speed_max = v if self.speed_max is None else max(self.speed_max, v)
@@ -107,6 +110,7 @@ class _Summary:
             "speed_kmh_mean": None if not self.speed_n else round(self.speed_sum / self.speed_n, 1),
             "cars_confirmed": self.cars,  # ordinal -> samples (identity confirmed by hysteresis)
             "samples_without_confirmed_car": self.unverified_car_samples,
+            "empty_samples": self.empty_samples,  # game packets without driving data (IsRaceOn = 0, all zero)
             "gaps_over_250ms": self.gap_count,
             "gap_time_s": round(self.gap_time_s, 2),
             "covered_s": round(covered, 2),

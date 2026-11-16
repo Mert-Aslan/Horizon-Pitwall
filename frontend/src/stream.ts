@@ -40,6 +40,9 @@ export interface Snapshot {
   /** set when the server keeps sending messages this page cannot read */
   protocolError: string | null;
   badMessages: number;
+  /** the game is sending packets without driving data (IsRaceOn = 0, all fields zero);
+   *  `frame` then keeps the last frame that had data, if it belongs to this stream */
+  telemetryEmpty: boolean;
 }
 
 const INITIAL: Snapshot = {
@@ -55,6 +58,7 @@ const INITIAL: Snapshot = {
   serverRestarts: 0,
   protocolError: null,
   badMessages: 0,
+  telemetryEmpty: false,
 };
 
 export function backoffMs(attempt: number, rand: () => number = Math.random): number {
@@ -98,6 +102,10 @@ export function parseMessage(text: string): Parsed {
   }
   if (typeof (f.stream_segment_id ?? f.session_id) !== "string") return { kind: "invalid", reason: "frame without a stream id" };
   return { kind: "frame", status: st as unknown as Status, frame: f as unknown as Frame };
+}
+
+export function isEmptyFrame(frame: Frame | null | undefined): boolean {
+  return !!frame?.quality?.flags?.includes("empty_packet");
 }
 
 export function streamKey(frame: Frame, helloInstance: string | null): string {
@@ -332,6 +340,7 @@ export class TelemetryStore {
     if (frame === null) {
       update.frame = null;
       update.raw = null;
+      update.telemetryEmpty = false;
       this.lastSeq = -1;
     } else {
       const key = streamKey(frame, this.instance);
@@ -358,7 +367,13 @@ export class TelemetryStore {
         update.raw = { values: frame.raw, sequence: frame.sequence, streamKey: key, receivedAt: now };
       }
       const { raw: _raw, ...rest } = frame;
-      update.frame = rest as Frame;
+      const empty = isEmptyFrame(frame);
+      update.telemetryEmpty = empty;
+      const prev = this.pending && "frame" in this.pending ? this.pending.frame : this.snap.frame;
+      const keepPrev = empty && !!prev && !isEmptyFrame(prev) && key === streamKey(prev, this.instance);
+      // An empty packet is not a measurement: keep showing the last real values (dimmed by
+      // the view state) instead of zeros/dashes. The trace still records the gap.
+      if (!keepPrev) update.frame = rest as Frame;
     }
     this.schedule(update);
   }
