@@ -6,6 +6,7 @@ import { fmt } from "../format";
 import { usePref } from "../prefs";
 import type { Snapshot } from "../stream";
 import type { Recording, RecordingDetail } from "../types";
+import { carDisplayName, useCars } from "../cars";
 import { Runs } from "./Runs";
 import { clock } from "./TopBar";
 
@@ -143,6 +144,7 @@ export function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
 }
 
 function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged: () => void; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
+  const { names } = useCars(true);
   const [d, setD] = useState<RecordingDetail | null>(null);
   const [form, setForm] = useState({ title: "", car_label: "", setup_label: "", notes: "" });
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -187,6 +189,10 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
   };
   const s = d.summary;
   const cars = s ? Object.entries(s.cars_confirmed) : [];
+  const carName = (k: string) => {
+    const n = names.get(Math.round(Number(k)));
+    return n ? ` ${carDisplayName(n)}` : "";
+  };
   return (
     <article className="session-detail" aria-labelledby="session-title">
       <header className="session-head">
@@ -222,7 +228,7 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
               ["Packets without driving data", s?.empty_samples !== undefined ? s.empty_samples.toLocaleString() : "not counted (older recording)"],
               ["Top speed", s?.speed_kmh_max !== null && s?.speed_kmh_max !== undefined ? `${fmt(s.speed_kmh_max, 1)} km/h` : "—"],
               ["Average speed", s?.speed_kmh_mean !== null && s?.speed_kmh_mean !== undefined ? `${fmt(s.speed_kmh_mean, 1)} km/h` : "—"],
-              ["Cars (confirmed id: samples)", cars.length ? cars.map(([k, v]) => `#${k}: ${v}`).join(", ") : "none confirmed"],
+              ["Cars (confirmed id: samples)", cars.length ? cars.map(([k, v]) => `#${k}${carName(k)}: ${v.toLocaleString()}`).join(", ") : "none confirmed"],
               ["Stopped because", d.stop_reason ? d.stop_reason.replace(/_/g, " ") : "—"],
               ["Format", `${d.chunk_format}, ${d.decoder}, app ${d.app_version}`],
             ] as [string, string | number][]

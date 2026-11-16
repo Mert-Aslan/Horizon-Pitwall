@@ -285,6 +285,36 @@ def main() -> int:
             page.get_by_role("button", name="Recordings").click()
             page.wait_for_selector(".session-row")
 
+            # M6 Garage: name a car id, see provenance, export, import, remove
+            page.get_by_role("button", name="Garage").click()
+            check(wait_until(lambda: "never guesses" in page.locator(".garage").inner_text()), "Garage explains that names are the user's own")
+            page.get_by_label("Name another car id").fill("4210")
+            page.get_by_role("button", name="Add").click()
+            page.get_by_label("Name", exact=True).fill("Smoke Hypercar")
+            page.get_by_label("Year").fill("2024")
+            page.get_by_role("button", name="Save name").click()
+            check(wait_until(lambda: "2024 Smoke Hypercar" in page.locator(".garage-list").inner_text() and "your name" in page.locator(".garage-list").inner_text()), "named car listed with its provenance")
+            exp = page.request.get(url.rstrip("/") + "/api/v1/cars/export")
+            check(exp.status == 200 and exp.json()["cars"][0]["ordinal"] == 4210, "names export as a file")
+            import json as _json
+            import tempfile as _tf
+            f = Path(_tf.gettempdir()) / "pitwall-smoke-cars.json"
+            f.write_text(_json.dumps({"format": "pitwall-car-aliases", "format_version": 1, "game": "fh6", "source": "smoke list", "version": "1",
+                                      "cars": [{"ordinal": 4210, "name": "Other"}, {"ordinal": 77, "name": "Seventy-seven"}]}), encoding="utf-8")
+            page.locator(".file-btn input").set_input_files(str(f))
+            check(wait_until(lambda: "1 added" in page.locator(".garage").inner_text() and "kept because you named them yourself" in page.locator(".garage").inner_text()),
+                  "import adds new names and keeps the user's own")
+            check("imported from smoke list" in page.locator(".garage-list").inner_text(), "imported name shows where it came from")
+            f.unlink(missing_ok=True)
+            if out:
+                page.screenshot(path=str(out / "garage-1920.png"), full_page=True)
+            row = page.locator(".garage-list > li", has_text="#4210")
+            row.get_by_role("button", name="Edit").click()
+            page.get_by_role("button", name="Remove name").click()
+            check(wait_until(lambda: "Smoke Hypercar" not in page.locator(".garage-list").inner_text()), "name removed")
+            page.get_by_role("button", name="Sessions").click()
+            page.wait_for_selector(".session-row")
+
             # M4 Telemetry Lab on the same recording
             page.locator(".session-analyze").click()
             check(wait_until(lambda: page.locator(".lab-stats tbody tr").count() >= 1, timeout=10), "Analyze opens the Lab with exact statistics")

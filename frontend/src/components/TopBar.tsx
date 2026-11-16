@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { carDisplayName, provenance, type CarName } from "../cars";
 import { ageText, fmt, isNum } from "../format";
 import { setRecording, type Snapshot } from "../stream";
 import type { ViewState } from "../viewstate";
 
-export type Tab = "live" | "sessions" | "diagnostics";
-export const TABS: readonly Tab[] = ["live", "sessions", "diagnostics"];
-const TAB_LABEL: Record<Tab, string> = { live: "Live", sessions: "Sessions", diagnostics: "Diagnostics" };
+export type Tab = "live" | "sessions" | "garage" | "diagnostics";
+export const TABS: readonly Tab[] = ["live", "sessions", "garage", "diagnostics"];
+const TAB_LABEL: Record<Tab, string> = { live: "Live", sessions: "Sessions", garage: "Garage", diagnostics: "Diagnostics" };
 
 interface Props {
   snap: Snapshot;
@@ -19,12 +20,14 @@ interface Props {
   onFocus: (on: boolean) => void;
   demoOrdinal: number | null;
   recordingAvailable: boolean;
+  catalogAvailable?: boolean;
+  carNames?: Map<number, CarName>;
 }
 
 /** What to call the car. The raw CarOrdinal is never altered; the server's identity
  *  tracker says whether the id is confirmed, still being checked or currently not sent
  *  (the game sends 0 for short periods, finding D-2). */
-export function carIdentityText(snap: Snapshot, demoOrdinal: number | null): { name: string; tag: string; title: string } | null {
+export function carIdentityText(snap: Snapshot, demoOrdinal: number | null, names?: Map<number, CarName>): { name: string; tag: string; title: string } | null {
   const f = snap.frame;
   if (!f) return null;
   const ci = f.car_identity;
@@ -32,8 +35,14 @@ export function carIdentityText(snap: Snapshot, demoOrdinal: number | null): { n
   if (demoOrdinal !== null && raw === demoOrdinal) return { name: "Demo car", tag: "synthetic", title: "Synthetic demo data" };
   if (!ci) return { name: `Car #${fmt(raw)}`, tag: "name not known yet", title: `CarOrdinal ${fmt(raw)}` };
   switch (ci.status) {
-    case "confirmed":
-      return { name: `Car #${ci.confirmed_ordinal}`, tag: "name not known yet", title: `CarOrdinal ${ci.confirmed_ordinal}: no name is known for this id yet` };
+    case "confirmed": {
+      if (ci.confirmed_ordinal !== null && ci.confirmed_ordinal < 0) {
+        return { name: `Car #${ci.confirmed_ordinal}`, tag: "synthetic id", title: "Negative car ids come from Pitwall's own test data, never from the game" };
+      }
+      const n = ci.confirmed_ordinal !== null ? names?.get(ci.confirmed_ordinal) : undefined;
+      if (n) return { name: carDisplayName(n), tag: provenance(n), title: `CarOrdinal ${ci.confirmed_ordinal}; name from the Garage (${provenance(n)})` };
+      return { name: `Car #${ci.confirmed_ordinal}`, tag: "name not known yet", title: `CarOrdinal ${ci.confirmed_ordinal}: no name yet. Give it one in the Garage.` };
+    }
     case "temporarily_unavailable":
       return {
         name: `Car #${ci.confirmed_ordinal}`,
@@ -49,9 +58,9 @@ export function carIdentityText(snap: Snapshot, demoOrdinal: number | null): { n
   }
 }
 
-export function CarIdentity({ snap, demoOrdinal }: { snap: Snapshot; demoOrdinal: number | null }) {
+export function CarIdentity({ snap, demoOrdinal, names }: { snap: Snapshot; demoOrdinal: number | null; names?: Map<number, CarName> }) {
   const car = snap.frame?.normalized.car;
-  const id = carIdentityText(snap, demoOrdinal);
+  const id = carIdentityText(snap, demoOrdinal, names);
   if (!car || !id) return <span className="car-id muted">No car yet</span>;
   return (
     <span className="car-id" title={id.title}>
@@ -132,10 +141,10 @@ function RecordControl({ snap }: { snap: Snapshot }) {
   );
 }
 
-export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable, overlay = null }: Props) {
+export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable, catalogAvailable = false, carNames, overlay = null }: Props) {
   const replay = overlay !== null;
   const st = snap.status;
-  const tabs = TABS.filter((t) => t !== "sessions" || recordingAvailable);
+  const tabs = TABS.filter((t) => (t !== "sessions" || recordingAvailable) && (t !== "garage" || catalogAvailable));
   return (
     <header className="topbar">
       <div className="brand" aria-label="Horizon Pitwall">
@@ -155,7 +164,7 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
         ))}
       </nav>
       <div className="topbar-car">
-        {replay ? <span className="car-id muted">{overlay === "lab" ? "Analysing a recording" : "Replaying a recording"}</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} />}
+        {replay ? <span className="car-id muted">{overlay === "lab" ? "Analysing a recording" : "Replaying a recording"}</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} names={carNames} />}
       </div>
       <div className="topbar-status">
         <RecordControl snap={snap} />

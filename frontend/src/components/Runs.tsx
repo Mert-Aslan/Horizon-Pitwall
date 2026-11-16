@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fitCanvas, niceStep, readPalette, timeTicks } from "../chart";
 import { fmt } from "../format";
+import { carDisplayName, useCars, type CarName } from "../cars";
 import type { RunRow } from "../types";
 import { RUN_KINDS } from "./PerfRun";
 
@@ -18,7 +19,10 @@ const when = (utc: string) => {
   const d = new Date(utc);
   return Number.isNaN(d.getTime()) ? utc : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 };
-const carText = (r: RunRow) => r.car_label || (r.car_ordinal !== null ? `Car #${r.car_ordinal}` : "unknown car");
+const carText = (r: RunRow, names: Map<number, CarName>) => {
+  const n = r.car_ordinal !== null ? names.get(r.car_ordinal) : undefined;
+  return r.car_label || (n ? carDisplayName(n) : r.car_ordinal !== null ? `Car #${r.car_ordinal}` : "unknown car");
+};
 
 function Overlay({ a, b }: { a: Trace; b: Trace }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -99,7 +103,7 @@ function Overlay({ a, b }: { a: Trace; b: Trace }) {
   );
 }
 
-function Compare({ a, b }: { a: RunRow; b: RunRow }) {
+function Compare({ a, b, names }: { a: RunRow; b: RunRow; names: Map<number, CarName> }) {
   const [ta, setTa] = useState<Trace | null>(null);
   const [tb, setTb] = useState<Trace | null>(null);
   useEffect(() => {
@@ -125,7 +129,7 @@ function Compare({ a, b }: { a: RunRow; b: RunRow }) {
   const rows: [string, string, string][] = [
     ["Time", `${fmt(a.time_s, 2)} s`, `${fmt(b.time_s, 2)} s`],
     ["Distance", `${fmt(a.distance_m, 1)} m`, `${fmt(b.distance_m, 1)} m`],
-    ["Car", carText(a), carText(b)],
+    ["Car", carText(a, names), carText(b, names)],
     ["Setup (your label)", a.setup_label || "—", b.setup_label || "—"],
     ["PI", fmt(a.pi), fmt(b.pi)],
     ["Recorded", when(a.started_utc), when(b.started_utc)],
@@ -172,6 +176,7 @@ function Compare({ a, b }: { a: RunRow; b: RunRow }) {
 }
 
 export function Runs() {
+  const { names } = useCars(true);
   const [rows, setRows] = useState<RunRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [kind, setKind] = useState(RUN_KINDS[0].id);
@@ -254,7 +259,7 @@ export function Runs() {
                     <td className="num">{r.valid ? `${fmt(r.time_s, 2)} s` : "—"}</td>
                     <td className="num">{r.valid ? `${fmt(r.distance_m, 1)} m` : "—"}</td>
                     <td>
-                      {carText(r)}
+                      {carText(r, names)}
                       {r.pi !== null && <span className="muted small"> PI {fmt(r.pi)}</span>}
                     </td>
                     <td>{r.setup_label || <span className="muted">—</span>}</td>
@@ -271,7 +276,7 @@ export function Runs() {
           </div>
         )}
       </section>
-      {chosen.length === 2 ? <Compare a={chosen[0]} b={chosen[1]} /> : <p className="muted small pad">Select two runs of the same type to compare them.</p>}
+      {chosen.length === 2 ? <Compare a={chosen[0]} b={chosen[1]} names={names} /> : <p className="muted small pad">Select two runs of the same type to compare them.</p>}
     </div>
   );
 }

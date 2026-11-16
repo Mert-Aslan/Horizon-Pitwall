@@ -16,6 +16,7 @@ import uvicorn
 from . import config as config_mod
 from .api.app import DIST, create_app
 from .buildinfo import BuildInfo
+from .catalog import CarCatalog
 from .recording.recorder import Recorder
 from .recording.store import Store
 from .telemetry import schema
@@ -68,6 +69,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     except config_mod.ConfigError as e:
         print(f"[pitwall] configuration error in {e}", file=sys.stderr)
         return 2
+    if getattr(cfg, "show_paths", False):
+        for k, v in cfg.paths().items():
+            print(f"{k:12} {v}")
+        return 0
     _setup_logging(cfg)
     log = logging.getLogger("pitwall")
 
@@ -89,8 +94,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         recorder = Recorder(Store(cfg.data_path / "recordings"), app_version=config_mod.APP_VERSION, queue_size=cfg.recorder_queue_size)
     except Exception as e:  # noqa: BLE001 - live view must work even if the data folder is unusable
         log.error("event=recorder_unavailable recordings disabled: %s", e)
+    catalog = None
+    try:
+        catalog = CarCatalog(cfg.data_path / "catalog.sqlite3")
+    except Exception as e:  # noqa: BLE001
+        log.error("event=catalog_unavailable car names disabled: %s", e)
     capture = DiagnosticCapture(cfg.data_path / "captures", max_bytes=int(cfg.diagnostic_capture_max_mb * 2**20), app_version=config_mod.APP_VERSION)
-    app = create_app(cfg, hub, receiver, recorder=recorder, capture=capture, build=build)
+    app = create_app(cfg, hub, receiver, recorder=recorder, capture=capture, build=build, catalog=catalog, paths=cfg.paths())
 
     shown = "127.0.0.1" if host == "0.0.0.0" else host
     url = f"http://{shown}:{cfg.web_port}/"

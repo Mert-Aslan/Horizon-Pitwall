@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "Horizon Pitwall"
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.7.0"
 GAME_RESERVED_PORTS = range(5200, 5301)  # the game binds its own socket in this range
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 EQUAL_TIMESTAMP_POLICIES = ("reject", "accept_changed")
@@ -144,6 +144,16 @@ class Config:
     def data_path(self) -> Path:
         return Path(self.data_dir) if self.data_dir else default_data_dir()
 
+    def paths(self) -> dict[str, str]:
+        d = self.data_path
+        return {
+            "data_dir": str(d),
+            "logs": str(d / "logs" / "pitwall.log"),
+            "recordings": str(d / "recordings"),
+            "captures": str(d / "captures"),
+            "car_catalog": str(d / "catalog.sqlite3"),
+        }
+
     def public(self) -> dict:
         return asdict(self)
 
@@ -184,6 +194,7 @@ def load(argv: Optional[list[str]] = None) -> Config:
     ap.add_argument("--open", dest="open_browser", action="store_true", default=None, help="open the UI in the default browser")
     ap.add_argument("--data-dir", help="folder for logs, recordings and diagnostic captures")
     ap.add_argument("--log-level", choices=[*LOG_LEVELS, *(x.lower() for x in LOG_LEVELS)])
+    ap.add_argument("--paths", dest="show_paths", action="store_true", help="print where logs, recordings and the car catalog are kept, then exit")
     args = ap.parse_args(argv)
 
     cfg = Config()
@@ -203,4 +214,5 @@ def load(argv: Optional[list[str]] = None) -> Config:
     if isinstance(cfg.log_level, str):
         cfg.log_level = cfg.log_level.upper()
     cfg.validate(source)
+    cfg.show_paths = bool(args.show_paths)  # type: ignore[attr-defined]  (CLI-only action, not a setting)
     return cfg

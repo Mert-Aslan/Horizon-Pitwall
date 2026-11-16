@@ -52,6 +52,7 @@ interface Diag {
   stream?: { ws_send_timeouts: number; ws_closed: number; ws_errors: number; asyncio_close_resets: number };
   recorder?: RecorderStatus & { mode_mismatch: number; flush_ms_max: number; chunks_written: number };
   build?: { build_id: string; server_instance_id: string; started_at_utc: string; ui: { ui_version: string; ui_build_id: string } | null };
+  paths?: { data_dir?: string; logs?: string };
   notes: string[];
 }
 
@@ -271,6 +272,8 @@ export function Diagnostics({ snap, view, caps }: { snap: Snapshot; view: ViewSt
             ["Server build", d?.build?.build_id],
             ["UI served", d?.build?.ui ? `${d.build.ui.ui_version} (${d.build.ui.ui_build_id})` : "no build manifest"],
             ["Schema", caps ? `${caps.schema.id} v${caps.schema.version}, ${caps.schema.documented_packet_length} bytes` : null],
+            ["Data folder", d?.paths?.data_dir],
+            ["Log file", d?.paths?.logs],
           ]}
         />
         <div className="row-actions">

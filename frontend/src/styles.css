@@ -1672,3 +1672,90 @@ textarea {
   color: var(--text-2);
   padding-left: 18px;
 }
+
+/* ---------------------------------------------------------------- garage */
+.garage-list {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+}
+.garage-list > li {
+  border-bottom: 1px solid var(--line);
+  padding: var(--s-2) 0;
+}
+.garage-list > li.is-live {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--s-2);
+}
+.garage-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-areas: "id name btn" "id meta btn";
+  column-gap: var(--s-3);
+  align-items: center;
+}
+.garage-id {
+  grid-area: id;
+  color: var(--text-2);
+}
+.garage-name {
+  grid-area: name;
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+.garage-meta {
+  grid-area: meta;
+}
+.garage-row .btn {
+  grid-area: btn;
+}
+.car-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-2) var(--s-3);
+  margin: var(--s-2) 0 var(--s-2) 64px;
+}
+.car-editor .field input,
+.garage-add .field input {
+  min-width: 0;
+  width: 220px;
+}
+.field-short input {
+  width: 90px !important;
+}
+.garage-add {
+  margin-top: var(--s-4);
+  align-items: end;
+}
+.file-btn {
+  position: relative;
+  overflow: hidden;
+}
+.file-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.file-btn:focus-within {
+  outline: 2px solid var(--accent);
+}
+@media (max-width: 600px) {
+  .garage-row {
+    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-areas: "id name" "id meta" "id btn";
+  }
+  .car-editor {
+    margin-left: 0;
+  }
+}
+
+a.btn {
+  display: inline-block;
+  text-decoration: none;
+  color: inherit;
+}

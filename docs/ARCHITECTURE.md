@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.6.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.7.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -32,12 +32,13 @@ Sürüm 0.6.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + k
 | `backend/recording/store.py`, `recorder.py` | Kayıt depolama ve durum makinesi, kurtarma — [STORAGE_FORMAT.md](STORAGE_FORMAT.md) |
 | `backend/analysis/lab.py` | Telemetry Lab: kanal kaydı, sütun önbelleği, seri/özet/G-G/rota/güç/olay/CSV |
 | `backend/analysis/perf.py` | Performans denemeleri: ortak durum makinesi (kayıt + canlı), `LivePerf` |
+| `backend/catalog.py` | Araç adları (Garage): yerel SQLite, kaynak/sürüm, içe/dışa aktarma kuralları, görülen araçlar |
 | `backend/buildinfo.py` | Build kimliği (içerik özeti, UI manifesti, süreç kimliği) |
 | `backend/api/app.py` | REST + WebSocket, akış kontrolü, güvenlik başlıkları, statik UI |
 | `backend/config.py`, `backend/main.py` | Sıkı ayar doğrulama (varsayılan < JSON < CLI), UTC loglama, başlatma/kapanış |
 | `frontend/src` | React + TypeScript + Vite arayüzü |
 
-Henüz yok: araç kataloğu ve Windows dağıtımı (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
+Brief'teki M1–M6 kapsamı uygulandı; imzalı kurulum paketi ve otomatik güncelleme yok. Boş klasör veya çalışmayan düğme olarak eklenmedi.
 
 ## Kimlik ve zaman
 
@@ -118,6 +119,8 @@ Boş paketler (`IsRaceOn = 0`, diğer her şey 0; P-9) kabul edilir ama normaliz
 | `GET /api/v1/recordings/{id}/runs`, `GET /api/v1/runs?kind=&valid_only=` | kayıttaki / tüm kayıtlardaki performans denemeleri (etiketleriyle; `runs` tablosunda önbellek) |
 | `GET /api/v1/recordings/{id}/runs/{i}/trace?pad=` | bir denemenin tam çözünürlük hız/gaz/fren/ivme dizileri, zaman denemenin başlangıcına göre |
 | `GET /api/v1/perf`, `POST /api/v1/perf/arm {kind}`, `POST /api/v1/perf/disarm` | canlı deneme; durum ayrıca WS `status.perf` |
+| `GET /api/v1/cars`, `PUT/DELETE /api/v1/cars/{ordinal}`, `POST /api/v1/cars/import`, `GET /api/v1/cars/export` | araç adları ve kayıtlarda görülen araçlar; içe aktarma ≤ 2 MB / 5000 araç |
+| `GET /api/v1/paths` | veri, log, kayıt, yakalama ve katalog yolları |
 | `GET/POST /api/v1/diagnostics/capture`, `POST …/capture/stop` | tanılama yakalaması (5–120 s, boyut sınırlı) |
 | `WS /api/v1/stream` | `hello` → `frame`; istemci `subscribe`, `resync`, `flow`, `ack` gönderebilir |
 
@@ -152,6 +155,10 @@ Analiz sunucuda, tam çözünürlükte yapılır. Bir kayıt ilk açıldığınd
 - Ardışıklık kuralı (`Columns.breaks`): 250 ms'den uzun aralık, segment değişimi veya boş paket bir çizgiyi/entegrasyonu keser. Rota ayrıca hızla açıklanamayan sıçramada (> 2·v·dt + 5 m) kesilir.
 - Sezgisel sonuçlar kuralını ve `confidence` alanını taşır; ideal sıcaklık, setup önerisi veya dyno iddiası yoktur.
 - Tarayıcı tarafı (`frontend/src/components/Lab.tsx`) aralık değişince istekleri 120 ms durulunca gönderir, eskisini iptal eder; ortak grafik yardımcıları `frontend/src/chart.ts` (palet, zaman adımları, kanvas boyutlama, değer aralığı) canlı grafikle paylaşılır.
+
+## Veri sürümleri ve geri dönüş
+
+Kayıt veritabanı (`meta.db_schema_version` = 1) ve araç kataloğu (`meta.schema_version` = 1) şema sürümü taşır. Açılışta kayıtlı sürüm uygulamanın desteklediğinden büyükse veri değiştirilmez: `SchemaTooNew` → recorder ve/veya katalog devre dışı, canlı görünüm çalışır, log'a neden yazılır (test: `test_newer_recordings_schema_disables_recording_without_changes`). Yeni tablolar (ör. türetilmiş `runs`) eski sürümlerce yok sayılır. Dağıtım ve güncelleme: [INSTALL.md](INSTALL.md).
 
 ## Sınırlar
 

@@ -23,6 +23,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ..analysis import lab, perf
 from ..buildinfo import BuildInfo
+from ..catalog import CarCatalog, CatalogError, dumps_export, seen_cars
 from ..config import APP_NAME, APP_VERSION, Config
 from ..recording.recorder import Recorder, RecorderBusy, RecorderIdle
 from ..recording.store import EDITABLE, decode_datagram
@@ -106,6 +107,13 @@ class RecordingPatch(BaseModel):
     setup_label: Optional[str] = None
 
 
+class CarEntry(BaseModel):
+    name: str
+    year: Optional[int] = None
+    variant: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class ArmRequest(BaseModel):
     kind: str
 
@@ -173,6 +181,8 @@ def create_app(
     capture: Optional[DiagnosticCapture] = None,
     build: Optional[BuildInfo] = None,
     live_perf: Optional[perf.LivePerf] = None,
+    catalog: Optional[CarCatalog] = None,
+    paths: Optional[dict] = None,
 ) -> FastAPI:
     demo = demo or DemoGenerator(hub)
     build = build or BuildInfo(APP_VERSION, API_VERSION, schema.SCHEMA_VERSION, DIST)
@@ -288,7 +298,7 @@ def create_app(
                 "diagnostic_capture": capture is not None,
                 "replay": recorder is not None,
                 "analysis": recorder is not None,
-                "car_catalog": False,
+                "car_catalog": catalog is not None,
             },
             "units": {"speed": "km/h (derived from m/s)", "power": "kW / hp (mechanical) derived from W", "torque": "N*m", "boost": "psi above atmospheric"},
             "verification": {
@@ -322,6 +332,7 @@ def create_app(
                 "chunks_written": recorder.chunks_written,
             }
         d["build"] = build.as_dict()
+        d["paths"] = paths or {}
         d["config"] = {k: v for k, v in cfg.public().items() if k not in ("data_dir",)}
         return d
 
@@ -584,6 +595,59 @@ def create_app(
         nan_none = lambda v: None if v != v else round(v, 4)  # noqa: E731
         return {"run": r, "t": [round(col.el[k] - r["t_start"], 4) for k in range(lo, hi)],
                 **{c: [nan_none(a[k]) for k in range(lo, hi)] for c, a in ch.items()}}
+
+    # ------------------------------------------------------- car names (M6)
+    def need_catalog() -> CarCatalog:
+        if catalog is None:
+            raise HTTPException(503, "the car catalog is not available in this instance")
+        return catalog
+
+    @app.get("/api/v1/cars")
+    def cars():
+        cat = need_catalog()
+        recs = recorder.store.list(limit=1000) if recorder is not None else []
+        return {
+            "catalog": cat.list(),
+            "seen": seen_cars(recs),
+            "note": "Names are yours or imported by you; Pitwall ships no built-in list. Live values always come from telemetry.",
+        }
+
+    @app.put("/api/v1/cars/{ordinal}")
+    def put_car(ordinal: int, req: CarEntry):
+        try:
+            return need_catalog().set_user({"ordinal": ordinal, **req.model_dump()})
+        except CatalogError as e:
+            raise HTTPException(422, str(e)) from None
+
+    @app.delete("/api/v1/cars/{ordinal}")
+    def delete_car(ordinal: int):
+        if not need_catalog().delete(ordinal):
+            raise HTTPException(404, "no name stored for this car")
+        return {"deleted": ordinal}
+
+    @app.post("/api/v1/cars/import")
+    async def import_cars(request: Request):
+        body = await request.body()
+        if len(body) > 2_000_000:
+            raise HTTPException(413, "the file is larger than 2 MB")
+        try:
+            data = json.loads(body)
+        except ValueError:
+            raise HTTPException(422, "the file is not valid JSON") from None
+        try:
+            return need_catalog().import_file(data)
+        except CatalogError as e:
+            raise HTTPException(422, str(e)) from None
+
+    @app.get("/api/v1/cars/export")
+    def export_cars():
+        doc = dumps_export(need_catalog().export())
+        return PlainTextResponse(doc, media_type="application/json", headers={"Content-Disposition": 'attachment; filename="pitwall-car-names.json"'})
+
+    @app.get("/api/v1/paths")
+    def data_paths():
+        """Where this instance keeps logs, recordings, captures and the car catalog."""
+        return paths or {}
 
     @app.get("/api/v1/perf")
     def perf_status():

@@ -4,9 +4,13 @@
 
 > Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
 
-Sürüm 0.6.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay**, **Telemetry Lab** ve **performans denemeleri** (Sessions); gerçek FH6 oturumuyla doğrulandı. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Sürüm 0.7.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay**, **Telemetry Lab**, **performans denemeleri** ve **Garage** (araç adları); gerçek FH6 oturumuyla doğrulandı. Kurulum ve güncelleme: [docs/INSTALL.md](docs/INSTALL.md). Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
+
+**Kolay yol (Windows):** zip'i bir klasöre açın, `Install Pitwall.cmd`, sonra `Start Pitwall.cmd`. Ayrıntı, güncelleme ve geri dönüş: [docs/INSTALL.md](docs/INSTALL.md).
+
+**Geliştirici:**
 
 Gereken: Windows, Python 3.11+ (3.13.3 ile test edildi). Son kullanıcı için Node **gerekmez**; derlenmiş arayüz `frontend/dist` içinde gelir.
 
@@ -43,6 +47,7 @@ Sık kullanılan seçenekler (`--help` tümünü listeler):
 | `--open` | Varsayılan tarayıcıda aç |
 | `--lan` | Arayüzü yerel ağda yayınla (opt-in; aşağıya bakın) |
 | `--data-dir KLASÖR` | Log, kayıt ve tanılama yakalamalarının klasörü (varsayılan `%LOCALAPPDATA%\HorizonPitwall`) |
+| `--paths` | Veri, log, kayıt ve araç adı dosyalarının yerini yazar ve çıkar |
 | `--config dosya.json` | Ayar dosyası (`pitwall.config.example.json` örnek; `./pitwall.config.json` varsa otomatik okunur) |
 
 Ayar dosyası ve komut satırı aynı sıkı doğrulamadan geçer: `"lan": "false"` gibi tırnaklı değerler, `true` port, `NaN` veya bilinmeyen anahtarlar reddedilir; hata mesajı hangi alanın neden geçersiz olduğunu (JSON'da satır/sütun) söyler ve uygulama kod 2 ile çıkar.
@@ -73,6 +78,8 @@ python .\tools\send_synthetic.py --port 15607 --seconds 30
 **Analiz (Telemetry Lab):** Sessions'ta **Analyze**. İstediğiniz kanalları (hız, devir, pedallar, direksiyon, güç/tork, ivmeler, teker slip'i, süspansiyon, lastik sıcaklığı, konum) üst üste çizer; grafikte sürükleyerek yakınlaştırırsınız. Seçili aralık için tam çözünürlüklü istatistik, mesafe, tam gaz/fren/tutuş kaybı süreleri, G-G dağılımı, üstten rota ve devir bandına göre güç; otomatik olaylar (veri boşluğu, boş paket, gaz altında tutuş kaybı, olası çarpma — her biri kuralıyla) ve kendi notlarınız. **Export CSV** seçili kanalları ve aralığı dışa aktarır. Sezgisel sonuçlar "heuristic" olarak işaretlidir; ideal değer veya ayar önerisi verilmez.
 
 **Performans denemeleri:** Live'da *Performance run* altında 0–100, 100–200 km/h veya 100–0 fren seçip **Arm**'a basın; ekrandaki talimata göre sürün, süre ve mesafe sunucu tarafından ölçülür. Kayıtlardaki denemeler Sessions → *Runs & comparison*'da listelenir; iki tanesini seçince hizalı hız eğrileri ve farklar görünür. Veri boşluğu, boş paket, geri sarma, sıçrama, geri gitme veya araç değişimi olan denemeler geçersiz sayılır ve nedeni yazılır. Kurallar: [docs/PROTOCOL.md](docs/PROTOCOL.md#performans-denemeleri-m5).
+
+**Garage:** oyun her araç için yalnız bir sayı gönderir; Pitwall hazır bir ad listesiyle gelmez ve tahmin etmez. Garage'da bir araca bir kez ad verin; üst şeritte, Sessions'ta ve karşılaştırmalarda kullanılır. Ad listelerini dışa aktarıp paylaşabilir, başkasının listesini içe aktarabilirsiniz; içe aktarma sizin yazdığınız adları asla değiştirmez ve her ad kaynağını gösterir.
 
 Dosyalar `<data dir>\recordings` altında (SQLite + sıkıştırılmış JSONL; 60 Hz'de saatte ≈ 27 MB). Uygulama çökerse bir sonraki başlangıçta yarım kalan kayıt kurtarılır ve "recovered after a crash" olarak işaretlenir. Kayıtlar otomatik silinmez. Biçim: [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md).
 

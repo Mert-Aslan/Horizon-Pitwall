@@ -1,6 +1,6 @@
 # Uygulama durumu
 
-Son güncelleme: 17 Kasım 2026 · **Sürüm 0.6.0** (backend `APP_VERSION` 0.6.0, frontend `package.json` 0.6.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
+Son güncelleme: 17 Kasım 2026 · **Sürüm 0.7.0** (backend `APP_VERSION` 0.7.0, frontend `package.json` 0.7.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
 
 ## Güncel durum
 
@@ -12,7 +12,7 @@ Son güncelleme: 17 Kasım 2026 · **Sürüm 0.6.0** (backend `APP_VERSION` 0.6.
 | **M3** istemciye özel replay | ✅ | gerçek 8 dk kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M4** Telemetry Lab + olaylar + notlar + CSV | ✅ | gerçek kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M5** performans denemeleri + iki denemeyi karşılaştırma | ✅ (ilk sürüm) | gerçek kayıtta 17 geçerli deneme; mesafe/rota bazlı delta yok |
-| M6 | ⏳ | araç kataloğu, Windows dağıtımı |
+| **M6** araç adları (Garage) + Windows kurulum/başlatma + güncelleme/geri dönüş | ✅ | paket oluşturuldu ve paketten çalıştırıldı; internetsiz kurulum (`--wheels`) indirme izni bekliyor |
 
 Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçek tarayıcı testi** (headless Chromium), **pasif oyun gözlemi** (kullanıcının çalışan örneğinden salt okuma), **kontrollü gerçek oyun doğrulaması** (henüz yok).
 
@@ -31,6 +31,14 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 | WinError 10054 logu | kullanıcının logunda 1 kez (15:20:50) | yalnız tam bu durum tek satır INFO + sayaç; diğerleri varsayılan işleyicide | yeniden üretilemedi (0.2.0 ve 0.3.0 backend, 4 desen × 5); **tetikleyici açık** |
 
 **Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. Baseline commit `716cbc5` üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
+
+### 0.7.0 — M6 araç adları ve kurulum
+
+- **Garage (araç adları):** oyun yalnız `CarOrdinal` gönderir; Pitwall hazır bir ad listesiyle **gelmez** (bu proje için doğrulanmış, lisanslı bir FH6 kaynağı yok; tahmin yanlış etiket olurdu). Adlar kullanıcının yazdıklarıdır veya kullanıcının seçtiği bir JSON listesinden içe aktarılır. Her kayıt kaynağını (`user` / `import:<etiket>` + sürüm, oluşturma/güncelleme zamanı) taşır. İçe aktarma kullanıcının adını asla ezmez; başka bir listenin adıyla çakışmayı değiştirmeden raporlar; aynı listenin yeni sürümü kendi kayıtlarını günceller. Negatif (sentetik) ve 0 kimlikler reddedilir. Adlar üst şeritte (kaynağıyla), Sessions'ta, Runs'ta ve karşılaştırmada kullanılır; güç/PI/çekiş her zaman telemetriden gelir. Kayıtlarda görülen araçlar (özetlerden) ve o an pistteki araç Garage'da listelenir.
+- **Kurulum:** `Install Pitwall.cmd` uygulama klasöründe özel bir `.venv` oluşturur (`wheels` klasörü varsa internetsiz, yoksa pypi.org'dan); `Start Pitwall.cmd` Python/paket kontrolü yapar, anlaşılır mesajla durur, `--open` ile başlatır ve ek argümanları geçirir. Yolda boşluk olabilir (bu projenin yolunda var; ilk sürümde tırnak hatası bulunup düzeltildi). `tools/build_release.py` yalnız gerekli dosyalarla klasör + zip ve SHA-256'lı `MANIFEST.json` üretir.
+- **Veri güvenliği:** kayıt veritabanı ve araç kataloğu şema sürümü taşır; daha yeni bir sürümün yazdığı veriyi eski sürüm **değiştirmez** (kayıt/ad özellikleri kapanır, canlı görünüm çalışır, log'a neden yazılır). `--paths` ve `GET /api/v1/paths` veri, log, kayıt, yakalama ve katalog yollarını gösterir; Diagnostics'te de var.
+- **Rehber:** [INSTALL.md](INSTALL.md) — kurulum, veri konumu, yedek, güncelleme (yeni klasöre), geri dönüş, kaldırma, sorun giderme, paket oluşturma.
+- **Doğrulama:** paket (`HorizonPitwall-0.7.0.zip`, 0.2 MiB, 37 dosya) geçici bir klasöre açıldı; `Start Pitwall.cmd --paths` boşluklu yolda doğru çalıştı; paketteki uygulama izole portlarda başlatıldı: `/api/v1/build` backend özeti ve UI build kimliği `MANIFEST.json` ile **eşleşti**, arayüz servis edildi, tüm özellikler açık; yalnız o süreç kapatıldı, port boşaldı. `Install Pitwall.cmd` **çalıştırılmadı**: pypi.org'dan paket indirmesi gerekir (ya da `--wheels` ile paket oluştururken); bunun için izin istenecek.
 
 ### 0.6.0 — M5 performans denemeleri ve karşılaştırma
 
@@ -95,10 +103,10 @@ Yük testindeki yavaş istemci (5 mesaj/s okuyan) **29.6 s (p50) / 50.6 s (max)*
 
 | Komut | Sonuç |
 |---|---|
-| `python -m pytest` | **231 passed** (0.6.0: +15 performans denemeleri, +1 deneme/kurma API'si) (0.4.0: +1 replay pencere API'si; 0.5.0: +18 Lab — kanalların normalizer ile birebir eşleşmesi (gerçek paketler), tepe koruyan seyreltme ve tam istatistik, boşluk/boş paket, mesafe, vites değişimi, G-G, rota kesilmesi, güç filtresi, olay kuralları, CSV, önbellek; +1 Lab API + notlar) (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
+| `python -m pytest` | **248 passed** (0.7.0: +17 araç adları, içe/dışa aktarma kuralları, şema koruması, görülen araçlar, API) (0.6.0: +15 performans denemeleri, +1 deneme/kurma API'si) (0.4.0: +1 replay pencere API'si; 0.5.0: +18 Lab — kanalların normalizer ile birebir eşleşmesi (gerçek paketler), tepe koruyan seyreltme ve tam istatistik, boşluk/boş paket, mesafe, vites değişimi, G-G, rota kesilmesi, güç filtresi, olay kuralları, CSV, önbellek; +1 Lab API + notlar) (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
 | `cd frontend; npm test` (vitest) | **47 passed** (0.5.0: +2 ortak grafik yardımcıları; önceki: (21 mantık + 14 akış istemcisi + 10 replay oynatıcısı: sarma doğruluğu, eski pencerenin yeni konumu ezmemesi, 2× sıra ve bitiş, boşluk, sınırlı bellek, boş paket, hata/yeniden deneme, durulan sarma, başlangıç)) |
 | `npx tsc --noEmit`, `npm run build` | temiz; build `dist/build-manifest.json` üretir |
-| `python tools/ui_smoke.py` | **93/93** gerçek tarayıcı kontrolü (0.6.0: Live'da kurma/durum/iptal, Runs görünümü) (0.5.0: Lab açılışı, rozet, tablo max = tam çözünürlük max, sürükleyerek yakınlaştırma, kanal ekleme, seçimin yeniden yüklemede korunması, not ekle/sil, CSV, paneller, Lab → Replay) (0.3.1: boş paketlerde "No driving data" …; 0.4.0: replay rozeti, paneller, `Live:` etiketi, oynatma başına göre grafik, 0. saniyede ve sonda değerin kayıtla eşleşmesi, 2× ilerleme, replay sırasında canlı akışın sürmesi, Close replay) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
+| `python tools/ui_smoke.py` | **99/99** gerçek tarayıcı kontrolü (0.7.0: Garage — ad verme, kaynak etiketi, dışa aktarma, içe aktarmada kullanıcının adının korunması, silme) (0.6.0: Live'da kurma/durum/iptal, Runs görünümü) (0.5.0: Lab açılışı, rozet, tablo max = tam çözünürlük max, sürükleyerek yakınlaştırma, kanal ekleme, seçimin yeniden yüklemede korunması, not ekle/sil, CSV, paneller, Lab → Replay) (0.3.1: boş paketlerde "No driving data" …; 0.4.0: replay rozeti, paneller, `Live:` etiketi, oynatma başına göre grafik, 0. saniyede ve sonda değerin kayıtla eşleşmesi, 2× ilerleme, replay sırasında canlı akışın sürmesi, Close replay) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
 | `tools/repro_close_reset.py` | 10 RST → 0 traceback (0.2.0 ve 0.3.0 backend) |
 
 Smoke testine eklenenler: rAF askıdayken veri gelirken yeniden bağlanma olmaması, sayfa tekrar görünür olunca Receiving, Record/Stop'un sunucu durumunu yansıtması, kayıt süresi/örnek sayısı, Sessions listesi/detay/kaydedilen örnek/dosya bütünlüğü/etiket kaydetme/hız özeti, Sessions'ta 390 px taşma yok, **sayfa kapalıyken kaydın sürmesi** (127 örnek) ve yeniden açılan sayfanın kaydı göstermesi, Diagnostics'ten yakalama ve özeti, yeniden başlayan sunucunun yeni instance kimliği, aynı bundle'da sahte "yeni UI" uyarısı olmaması.
@@ -133,7 +141,7 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 
 ## Sıradaki tek somut iş
 
-**M6 — araç kimliği ve kurulum:** oyun + ordinal → yerel, sürümlü araç adı kataloğu (kullanıcı düzeltmesi ve kaynağıyla; isim benzerliği kesin eşleme sayılmaz), sonra Windows'ta tek tıkla kurulum/başlatma, veri klasörü ve güncelleme/geri dönüş rehberi.
+Brief'teki M1–M6 kilometre taşları tamamlandı. Sıradaki en değerli iş **gerçek kullanımla doğrulama**: 0.7.0 ile birkaç farklı araçta (en az bir arkadan itişli) kayıtlı sürüş, bilinçli 0–100 / 100–0 denemeleri (Live → Performance run) ve bir *Diagnostic capture*. Bu, olay eşiklerini, deneme kurallarını ve eşit zaman damgası kararını tek araçlık kanıttan çıkarır; ardından mesafe/rota bazlı karşılaştırma (aynı yol ve yön doğrulamasıyla).
 
 ## Açık işler
 
@@ -146,8 +154,9 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 - M5: mesafe/rota bazlı karşılaştırma (aynı yol ve yön doğrulaması) ve kişisel referans turu yok; deneme kuralları tek araçla doğrulandı. 100–200 denemelerinin çoğu normal sürüşten otomatik bulundu, bilinçli test değil.
 - Replay/Lab sayfa adresine yazılmaz (yenileyince Sessions'a dönülür). Lab'da imleçteki rota noktası ve çoklu kayıt karşılaştırması yok (M5).
 - Sezgisel olay eşikleri (tutuş kaybı, smashable) tek oturumla seçildi; farklı araçlarla gözden geçirilmeli. Gerçek kayıtta 8 dakikada 58 tutuş kaybı olayı çıktı (X sınıfı AWD, sert sürüş) — liste filtrelenebilir.
-- Windows paketleme, katalog, analiz (M4–M6).
+- İnternetsiz kurulum paketi (`build_release.py --wheels`) ve `Install Pitwall.cmd` gerçek bir temiz makinede/ortamda denenmedi (paket indirme izni gerekiyor). İmzalı .exe, otomatik güncelleme ve masaüstü kısayolu yok.
 - Kayıt silme/arşivleme arayüzü bilinçli olarak yok; kayıtlar `<data_dir>/recordings` altında ve yalnız elle silinir.
+- Araç adı listesi yok (bilinçli); paylaşılabilir liste biçimi hazır (`pitwall-car-aliases` v1).
 
 ## Sürüm kontrolü
 

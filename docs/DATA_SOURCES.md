@@ -7,13 +7,15 @@
 | FH6 Data Out UDP | Tek canlı kaynak. Şema: [PROTOCOL.md](PROTOCOL.md). |
 | Sentetik demo / fixture | Yerel üretilir, her zaman `mode: "demo"` ya da negatif `CarOrdinal` ile işaretli. |
 
-Bu sürüm **hiçbir dış servise istek yapmaz**; internet olmadan tamamen çalışır. API anahtarı istenmez ve saklanmaz.
+| Yerel araç adları (Garage, 0.7.0) | Kullanıcının yazdığı veya seçtiği JSON listesinden içe aktardığı adlar; her biri kaynağını ve sürümünü taşır. **Hazır liste yok.** |
+
+Bu sürüm **hiçbir dış servise istek yapmaz**; internet olmadan tamamen çalışır (yalnız ilk kurulum paketleri indirebilir). API anahtarı istenmez ve saklanmaz.
 
 ## Planlanan (Faz 4) — entegrasyon yapılmadı, yalnız doküman incelemesi
 
 | Kaynak | Katkı | Sınır | Öncelik |
 |---|---|---|---|
-| Sürümlü yerel `CarOrdinal` kataloğu + kullanıcı düzeltmeleri (CSV/JSON içe aktarma) | araç adı/yıl/varyant | Ordinal eşlemesi bu oyun sürümü için doğrulanmalı; başka Forza oyunundan kör kopya yok | P1 |
+| ~~Sürümlü yerel `CarOrdinal` kataloğu + kullanıcı düzeltmeleri~~ — **0.7.0'da yapıldı** (JSON; `game` alanı farklı oyunun listesini reddeder) | araç adı/yıl/varyant | Ordinal eşlemesi bu oyun sürümü için doğrulanmalı; başka Forza oyunundan kör kopya yok | — |
 | Resmi FH6 araç listesi (forza.net/fh6cars) | model adları/kapsam kontrolü | Web sayfası; ordinal lookup API'si olduğu kanıtlanmadı | P1 referans |
 | NHTSA vPIC | marka/model/yıl doğrulama (`GetModelsForMakeYear`) | Oyun VIN göndermez; ABD odaklı; beygir/tork/fiyat kataloğu değildir | P2 |
 | Wikimedia Commons (MediaWiki `prop=imageinfo&iiprop=url|extmetadata`) | araç görseli + lisans | Doğru nesil/varyant ve lisans her görsel için kontrol edilmeli; metadata HTML'i ham render edilmez | P2 |

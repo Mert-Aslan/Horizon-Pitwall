@@ -126,6 +126,11 @@ def decode_datagram(line: dict[str, Any]) -> bytes:
     return base64.b64decode(line["d"])
 
 
+class SchemaTooNew(RuntimeError):
+    """Recordings written by a newer Pitwall: this (older) version must not modify them.
+    Happens after a rollback; the live view keeps working, recording is disabled."""
+
+
 class Store:
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -136,6 +141,13 @@ class Store:
         conn = self.writer()
         try:
             with conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+                row = conn.execute("SELECT value FROM meta WHERE key='db_schema_version'").fetchone()
+                if row is not None and int(row[0]) > DB_SCHEMA_VERSION:
+                    raise SchemaTooNew(
+                        f"the recordings database was created by a newer Pitwall (schema {row[0]}, this version supports {DB_SCHEMA_VERSION}); "
+                        "recording is disabled so the data is not changed. Start the newer version again, or see docs/INSTALL.md."
+                    )
                 conn.executescript(SCHEMA)
                 conn.execute("INSERT OR IGNORE INTO meta VALUES ('db_schema_version', ?)", (str(DB_SCHEMA_VERSION),))
         finally:

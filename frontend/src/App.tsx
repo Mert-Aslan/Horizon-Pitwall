@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Banners } from "./components/Banners";
 import { Diagnostics } from "./components/Diagnostics";
+import { Garage } from "./components/Garage";
+import { useCars } from "./cars";
 import { Lab } from "./components/Lab";
 import { Live } from "./components/Live";
 import { Replay } from "./components/Replay";
@@ -38,7 +40,9 @@ export function App() {
     };
   }, [snap.link, snap.serverRestarts, capsFor]);
   const recordingAvailable = !!caps?.features.recording;
-  const shown: Tab = tab === "sessions" && caps && !recordingAvailable ? "live" : tab;
+  const catalogAvailable = !!caps?.features.car_catalog;
+  const { names: carNames } = useCars(catalogAvailable);
+  const shown: Tab = caps && ((tab === "sessions" && !recordingAvailable) || (tab === "garage" && !catalogAvailable)) ? "live" : tab;
 
 
   const focus = focusPref === "on";
@@ -67,6 +71,8 @@ export function App() {
         onFocus={(on) => setFocusPref(on ? "on" : "off")}
         demoOrdinal={caps?.demo_car_ordinal ?? null}
         recordingAvailable={recordingAvailable}
+        catalogAvailable={catalogAvailable}
+        carNames={carNames}
       />
       <Banners snap={snap} view={view} replay={!!overlay} />
       <main id="main" tabIndex={-1}>
@@ -80,6 +86,7 @@ export function App() {
             {shown === "sessions" && (
               <Sessions snap={snap} onReplay={(id) => setOverlay({ kind: "replay", id })} onAnalyze={caps?.features.analysis ? (id) => setOverlay({ kind: "lab", id }) : undefined} />
             )}
+            {shown === "garage" && <Garage snap={snap} />}
             {shown === "diagnostics" && <Diagnostics snap={snap} view={view} caps={caps} />}
           </>
         )}

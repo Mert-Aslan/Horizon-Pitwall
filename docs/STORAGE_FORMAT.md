@@ -11,6 +11,7 @@ Sürüm: veritabanı şeması 1, chunk biçimi `pitwall-jsonl-v1`, decoder kimli
     chunk-00000.jsonl.gz                   tamamlanmış chunk (~30 s veya 1800 örnek)
     chunk-00001.jsonl.gz.partial           yazılmakta olan chunk; veritabanı buna hiç başvurmaz
 <data_dir>/captures/                       tanılama yakalamaları (ayrı kota, en çok 10 dosya)
+<data_dir>/catalog.sqlite3                 araç adları (Garage), şema 1
 <data_dir>/logs/pitwall.log
 ```
 
@@ -31,6 +32,10 @@ Kabul edilen her datagram için bir JSON satırı:
 | `d` | orijinal 324 byte'lık datagram, base64 |
 
 Yalnız ham datagram saklanır: kayıpsızdır ve ileride düzeltilmiş bir decoder eski kaydı yeniden çözebilir. Normalize değerler okuma sırasında yeniden üretilir; ayrıca saklanmaz (iki kopya tutmanın maliyeti ölçülmedi, gerekçesi yok). Ölçülen boyut: örnek başına ≈ 120–130 byte gzip (5400 örnek = 0.69 MB, 17 999 örnek = 2.18 MB), yani 60 Hz'de saatte ≈ 27 MB. Eşit zaman damgalı örnekler `i` ile ayrılır.
+
+## Şema sürümü
+
+`meta.db_schema_version` = 1. Daha yeni bir değer bulunursa (geri dönülmüş bir sürüm) veritabanına yazılmaz; kayıt devre dışı kalır (bkz. [INSTALL.md](INSTALL.md#geri-dönüş-eski-sürüme)).
 
 ## Tablolar
 

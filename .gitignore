@@ -8,3 +8,5 @@ dist-profile/
 .claude/settings.local.json
 data/
 *.partial
+release/
+.venv/
