@@ -3,7 +3,13 @@ rem Horizon Pitwall - install into a private folder (.venv) next to this file.
 rem Nothing outside this folder is changed. Offline if a "wheels" folder is present.
 setlocal
 cd /d "%~dp0"
+set "WHEELPY="
+if exist "wheels\PYTHON_VERSION.txt" set /p WHEELPY=<"wheels\PYTHON_VERSION.txt"
 where py >nul 2>&1 && (set "BASE=py -3") || (set "BASE=python")
+rem The offline bundle contains compiled packages for one Python version: use exactly that one.
+if defined WHEELPY (
+  where py >nul 2>&1 && (set "BASE=py -%WHEELPY%")
+)
 %BASE% -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
 if errorlevel 1 (
   echo Python 3.11 or newer was not found.
@@ -11,6 +17,15 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+if not defined WHEELPY goto :venv
+%BASE% -c "import sys; sys.exit(0 if '.'.join(map(str, sys.version_info[:2])) == '%WHEELPY%' else 1)" >nul 2>&1
+if errorlevel 1 (
+  echo This offline package was built for Python %WHEELPY%, which was not found.
+  echo Install Python %WHEELPY% from https://www.python.org/downloads/, or delete the "wheels" folder to download the packages instead.
+  pause
+  exit /b 1
+)
+:venv
 if not exist ".venv\Scripts\python.exe" (
   echo Creating the private Python environment in "%~dp0.venv" ...
   %BASE% -m venv .venv || goto :fail

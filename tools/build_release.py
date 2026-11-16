@@ -79,6 +79,8 @@ def main() -> int:
         subprocess.run([sys.executable, "-m", "pip", "download", "-r", str(ROOT / "requirements.txt"), "-d", str(target / "wheels"),
                         "--only-binary=:all:", "--platform", "win_amd64",
                         "--python-version", f"{sys.version_info.major}.{sys.version_info.minor}"], check=True)
+        # Compiled wheels (pydantic_core) only fit this Python version; the installer reads it.
+        (target / "wheels" / "PYTHON_VERSION.txt").write_text(f"{sys.version_info.major}.{sys.version_info.minor}", encoding="ascii")
     files = sorted(p for p in target.rglob("*") if p.is_file())
     manifest = {
         "app": "Horizon Pitwall",

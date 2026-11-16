@@ -12,7 +12,7 @@ Son güncelleme: 17 Kasım 2026 · **Sürüm 0.7.0** (backend `APP_VERSION` 0.7.
 | **M3** istemciye özel replay | ✅ | gerçek 8 dk kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M4** Telemetry Lab + olaylar + notlar + CSV | ✅ | gerçek kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M5** performans denemeleri + iki denemeyi karşılaştırma | ✅ (ilk sürüm) | gerçek kayıtta 17 geçerli deneme; mesafe/rota bazlı delta yok |
-| **M6** araç adları (Garage) + Windows kurulum/başlatma + güncelleme/geri dönüş | ✅ | paket oluşturuldu ve paketten çalıştırıldı; internetsiz kurulum (`--wheels`) indirme izni bekliyor |
+| **M6** araç adları (Garage) + Windows kurulum/başlatma + güncelleme/geri dönüş | ✅ | internetsiz kurulum ağ kesikken temiz klasörde doğrulandı |
 
 Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçek tarayıcı testi** (headless Chromium), **pasif oyun gözlemi** (kullanıcının çalışan örneğinden salt okuma), **kontrollü gerçek oyun doğrulaması** (henüz yok).
 
@@ -38,7 +38,7 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 - **Kurulum:** `Install Pitwall.cmd` uygulama klasöründe özel bir `.venv` oluşturur (`wheels` klasörü varsa internetsiz, yoksa pypi.org'dan); `Start Pitwall.cmd` Python/paket kontrolü yapar, anlaşılır mesajla durur, `--open` ile başlatır ve ek argümanları geçirir. Yolda boşluk olabilir (bu projenin yolunda var; ilk sürümde tırnak hatası bulunup düzeltildi). `tools/build_release.py` yalnız gerekli dosyalarla klasör + zip ve SHA-256'lı `MANIFEST.json` üretir.
 - **Veri güvenliği:** kayıt veritabanı ve araç kataloğu şema sürümü taşır; daha yeni bir sürümün yazdığı veriyi eski sürüm **değiştirmez** (kayıt/ad özellikleri kapanır, canlı görünüm çalışır, log'a neden yazılır). `--paths` ve `GET /api/v1/paths` veri, log, kayıt, yakalama ve katalog yollarını gösterir; Diagnostics'te de var.
 - **Rehber:** [INSTALL.md](INSTALL.md) — kurulum, veri konumu, yedek, güncelleme (yeni klasöre), geri dönüş, kaldırma, sorun giderme, paket oluşturma.
-- **Doğrulama:** paket (`HorizonPitwall-0.7.0.zip`, 0.2 MiB, 37 dosya) geçici bir klasöre açıldı; `Start Pitwall.cmd --paths` boşluklu yolda doğru çalıştı; paketteki uygulama izole portlarda başlatıldı: `/api/v1/build` backend özeti ve UI build kimliği `MANIFEST.json` ile **eşleşti**, arayüz servis edildi, tüm özellikler açık; yalnız o süreç kapatıldı, port boşaldı. `Install Pitwall.cmd` **çalıştırılmadı**: pypi.org'dan paket indirmesi gerekir (ya da `--wheels` ile paket oluştururken); bunun için izin istenecek.
+- **Doğrulama:** paket (`HorizonPitwall-0.7.0.zip`, 0.2 MiB, 37 dosya) geçici bir klasöre açıldı; `Start Pitwall.cmd --paths` boşluklu yolda doğru çalıştı; paketteki uygulama izole portlarda başlatıldı: `/api/v1/build` backend özeti ve UI build kimliği `MANIFEST.json` ile **eşleşti**, arayüz servis edildi, tüm özellikler açık; yalnız o süreç kapatıldı, port boşaldı. **İnternetsiz kurulum (kullanıcı izniyle, 17 Kasım 2026):** `build_release.py --wheels` 14 paketi pypi.org'dan indirdi (3.4 MB). Zip boşluklu yeni bir klasöre açıldı, `Install Pitwall.cmd` ağ bilerek kesikken (geçersiz proxy ve paket dizini) 12.1 s'de kurdu; `.venv` sistem paketlerini görmüyor. `Start Pitwall.cmd` bu ortamla çalıştı; uygulama izole portlarda başladı, kimliği manifestle eşleşti, UDP alındı, arayüz açıldı; süreç ve port temizlendi. Bulunan risk ve çözüm: derlenmiş paketler Python sürümüne özgü ve bu makinede 3.12 + 3.13 var; paket artık `wheels\PYTHON_VERSION.txt` taşır, kurulum `py -<sürüm>` seçer ve uyuşmazlıkta açık mesajla durur. Not: test ortamında `cmd /c` dosyayı yalnız tam yolla buldu (`NoDefaultCurrentDirectoryInExePath` açık); çift tıklamayı etkilemez.
 
 ### 0.6.0 — M5 performans denemeleri ve karşılaştırma
 
@@ -154,7 +154,7 @@ Brief'teki M1–M6 kilometre taşları tamamlandı. Sıradaki en değerli iş **
 - M5: mesafe/rota bazlı karşılaştırma (aynı yol ve yön doğrulaması) ve kişisel referans turu yok; deneme kuralları tek araçla doğrulandı. 100–200 denemelerinin çoğu normal sürüşten otomatik bulundu, bilinçli test değil.
 - Replay/Lab sayfa adresine yazılmaz (yenileyince Sessions'a dönülür). Lab'da imleçteki rota noktası ve çoklu kayıt karşılaştırması yok (M5).
 - Sezgisel olay eşikleri (tutuş kaybı, smashable) tek oturumla seçildi; farklı araçlarla gözden geçirilmeli. Gerçek kayıtta 8 dakikada 58 tutuş kaybı olayı çıktı (X sınıfı AWD, sert sürüş) — liste filtrelenebilir.
-- İnternetsiz kurulum paketi (`build_release.py --wheels`) ve `Install Pitwall.cmd` gerçek bir temiz makinede/ortamda denenmedi (paket indirme izni gerekiyor). İmzalı .exe, otomatik güncelleme ve masaüstü kısayolu yok.
+- Kurulum bu PC'de temiz bir klasörde doğrulandı; Python'u hiç olmayan ayrı bir makinede denenmedi. İnternetsiz paket yalnız Python 3.13 içindir. İmzalı .exe, otomatik güncelleme ve masaüstü kısayolu yok.
 - Kayıt silme/arşivleme arayüzü bilinçli olarak yok; kayıtlar `<data_dir>/recordings` altında ve yalnız elle silinir.
 - Araç adı listesi yok (bilinçli); paylaşılabilir liste biçimi hazır (`pitwall-car-aliases` v1).
 

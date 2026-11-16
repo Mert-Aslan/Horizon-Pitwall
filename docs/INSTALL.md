@@ -12,7 +12,7 @@ Horizon Pitwall bilgisayarınızda yerel çalışır; internete yalnız kurulum 
 
 1. `HorizonPitwall-<sürüm>.zip` dosyasını istediğiniz bir klasöre açın (ör. `C:\Games\HorizonPitwall`). Yolda boşluk olabilir.
 2. **`Install Pitwall.cmd`**'yi çift tıklayın. Klasörün içinde özel bir Python ortamı (`.venv`) oluşturur ve gerekli paketleri kurar:
-   - zip içinde `wheels` klasörü varsa **internetsiz** kurar;
+   - zip içinde `wheels` klasörü varsa **internetsiz** kurar. Bu paketteki derlenmiş parçalar tek bir Python sürümü içindir (`wheels\PYTHON_VERSION.txt`, şu an 3.13); kurulum betiği `py -3.13` ile o sürümü seçer, yoksa ne kurmanız gerektiğini söyleyerek durur;
    - yoksa paketleri pypi.org'dan indirir (~10 MB).
    Klasör dışında hiçbir şey değişmez; sistem Python'una paket kurulmaz.
 3. **`Start Pitwall.cmd`** ile başlatın. Tarayıcıda `http://127.0.0.1:8080/` açılır. Kapatmak için pencereyi kapatın veya `Ctrl+C`.
@@ -79,4 +79,6 @@ cd ..
 python tools/build_release.py
 ```
 
-`release/HorizonPitwall-<sürüm>/` ve `.zip` oluşur: yalnız `backend/`, derlenmiş arayüz, başlatıcılar, `requirements.txt`, README ve bu rehber (test, araç, kayıt, log yok). `MANIFEST.json` her dosyanın SHA-256'sını ve çalışan kopyada `/api/v1/build`'in göstereceği backend özetini içerir. `--wheels` offline kurulum için paketleri pypi.org'dan indirip ekler (internet gerekir).
+`release/HorizonPitwall-<sürüm>/` ve `.zip` oluşur: yalnız `backend/`, derlenmiş arayüz, başlatıcılar, `requirements.txt`, README ve bu rehber (test, araç, kayıt, log yok). `MANIFEST.json` her dosyanın SHA-256'sını ve çalışan kopyada `/api/v1/build`'in göstereceği backend özetini içerir. `--wheels` offline kurulum için paketleri pypi.org'dan indirip ekler (internet gerekir; çalıştıran Python sürümü için, Windows 64 bit) ve `wheels\PYTHON_VERSION.txt` yazar.
+
+**Doğrulama (17 Kasım 2026):** 0.7.0 için `--wheels` ile 14 paket indirildi (3.4 MB; zip 3.5 MiB). Zip, yolunda boşluk olan yeni bir klasöre açıldı ve `Install Pitwall.cmd` ağ erişimi bilerek kesilmişken (geçersiz proxy + geçersiz paket dizini) çalıştırıldı: 12.1 s'de kuruldu, ortam sistem paketlerini görmüyor (`include-system-site-packages = false`). `Start Pitwall.cmd` bu ortamı kullandı; uygulama izole portlarda başladı, `/api/v1/build` kimliği `MANIFEST.json` ile eşleşti, UDP verisi alındı, arayüz açıldı. Geliştirme kopyasında bu zip `release/HorizonPitwall-0.7.0-offline-py3.13.zip` olarak durur (git'e girmez).
