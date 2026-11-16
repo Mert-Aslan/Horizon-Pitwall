@@ -4,7 +4,7 @@
 
 > Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
 
-Sürüm 0.2.0 — Faz 0–2 (veri doğruluğu + Live kokpit). Kayıt/replay/analiz henüz yok; ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Sürüm 0.3.0: veri doğruluğu, Live kokpit ve **manuel sürüş kaydı** (Sessions). Replay ve analiz henüz yok. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
 
@@ -42,7 +42,12 @@ Sık kullanılan seçenekler (`--help` tümünü listeler):
 | `--demo` | Açıkça etiketli sentetik veriyle başla |
 | `--open` | Varsayılan tarayıcıda aç |
 | `--lan` | Arayüzü yerel ağda yayınla (opt-in; aşağıya bakın) |
+| `--data-dir KLASÖR` | Log, kayıt ve tanılama yakalamalarının klasörü (varsayılan `%LOCALAPPDATA%\HorizonPitwall`) |
 | `--config dosya.json` | Ayar dosyası (`pitwall.config.example.json` örnek; `./pitwall.config.json` varsa otomatik okunur) |
+
+Ayar dosyası ve komut satırı aynı sıkı doğrulamadan geçer: `"lan": "false"` gibi tırnaklı değerler, `true` port, `NaN` veya bilinmeyen anahtarlar reddedilir; hata mesajı hangi alanın neden geçersiz olduğunu (JSON'da satır/sütun) söyler ve uygulama kod 2 ile çıkar.
+
+`udp_host` uygulamanın **dinlediği** adrestir (`127.0.0.1` = yalnız bu PC, `0.0.0.0` = ağdaki bir konsol/PC de gönderebilir). Oyunda yazılan Data Out IP ise **hedeftir**: Pitwall'ın çalıştığı PC'nin adresi (aynı PC'de `127.0.0.1`); `0.0.0.0` hedef olarak yazılmaz. `--lan` yalnız web arayüzünü ağa açar, UDP alımını değiştirmez.
 
 `python -m backend` aynı uygulamayı başlatır.
 
@@ -59,10 +64,17 @@ python .\tools\send_synthetic.py --port 15607 --seconds 30
 
 `send_synthetic.py` oyunun varsayılan portu 5607'ye `--allow-default-port` olmadan göndermez.
 
+## Kayıt
+
+Üst şeritteki **Record** düğmesi kabul edilen her paketi bu PC'ye kaydeder; **Stop** ile biter. Kayıt sunucuda çalışır: sayfa kapansa da sürer, düğme sunucunun gerçek durumunu gösterir. Demo kaydı "demo" olarak etiketlenir; demo ve canlı veri aynı kayda karışmaz. Kayıtlar **Sessions** sekmesindedir: süre, örnek sayısı, düşen örnek, kapsama, tepe/ortalama hız, onaylı araç kimlikleri, tüm kaydın hız özeti, olaylar; başlık, araç, setup/tune ve not etiketleri eklenebilir (oyun tuning ayarlarını göndermez, bunlar sizin yazdıklarınızdır); **Check files** dosyaları checksum ile doğrular.
+
+Dosyalar `<data dir>\recordings` altında (SQLite + sıkıştırılmış JSONL; 60 Hz'de saatte ≈ 27 MB). Uygulama çökerse bir sonraki başlangıçta yarım kalan kayıt kurtarılır ve "recovered after a crash" olarak işaretlenir. Kayıtlar otomatik silinmez. Biçim: [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md).
+
 ## Ekranlar
 
 - **Live** — devir bandı, vites + hız, gaz/fren ve merkezi sıfırlı direksiyon (debriyaj/el freni kompakt ya da genişletilmiş), dört teker (ham lastik sıcaklığı, combined slip, süspansiyon), son 20 s grafik (zaman ekseni, imleç, duraklatma, klavyeyle inceleme), güç/tork/boost/yakıt ve zamanlama. Üst şeritteki **Focus view** yalnız ana ölçümleri ve girişleri bırakır; tercih tarayıcıda saklanır.
-- **Diagnostics** — bağlantı durumu, paket sayaçları, uzunluk dağılımı, 324. byte değerleri, olaylar, reddedilen paket örnekleri, protokol doğrulama durumu ve ham alan inspector'ı (~4 Hz).
+- **Sessions** — kayıtlar (yukarıda).
+- **Diagnostics** — bağlantı durumu ve build kimliği, paket sayaçları (aynı zaman damgalı paketlerin sınıfları dahil), uzunluk dağılımı, 324. byte değerleri, olaylar, reddedilen paket örnekleri, akış/kayıt sayaçları, protokol doğrulama durumu, **tanılama yakalaması** (30/60 s, her datagram yerel dosyaya; gönderici adresleri isteğe bağlı gizlenir; hiçbir şey yüklenmez) ve ham alan inspector'ı (~4 Hz).
 
 Durumlar: `starting`, `waiting`, `receiving`, `stale`, `error`, sunucuya ulaşılamıyor, geçersiz paket, ikinci gönderici, demo. Ekran görüntüleri: [docs/screenshots](docs/screenshots).
 
@@ -78,7 +90,7 @@ python -m pytest
 cd frontend; npm ci; npm test
 ```
 
-Tarayıcı smoke testi (Python Playwright; bir kez `python -m playwright install chromium` gerekir). Kendi izole sunucusunu 18100/15620 portlarında başlatır, yeniden bağlanma için bir kez yeniden başlatır, yalnız kendi başlattığı süreç ağacını kapatır ve portların boşaldığını yazar:
+Tarayıcı smoke testi (Python Playwright; bir kez `python -m playwright install chromium` gerekir). Kendi izole sunucusunu 18100/15620 portlarında ve `%TEMP%\pitwall-isolated-18100` veri klasörüyle başlatır, yeniden bağlanma için bir kez yeniden başlatır, yalnız kendi başlattığı süreç ağacını kapatır ve portların boşaldığını yazar:
 
 ```powershell
 python tools/ui_smoke.py
@@ -86,7 +98,7 @@ python tools/ui_smoke.py
 
 Aynı veriyle önce/sonra ekran görüntüsü ve tarayıcı performans ölçümü: `tools/ui_capture.py` (kullanım dosyanın başında; `tools/isolated_server.py` içinde çalıştırılır).
 
-Sentetik fixture'ları yeniden üretmek: `python tools/make_fixtures.py`. Yük/gecikme ölçümü: `tools/loadtest.py` (çalışan bir örneğe karşı; ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)).
+Sentetik fixture'ları yeniden üretmek: `python tools/make_fixtures.py`. Yük/gecikme ölçümü: `tools/loadtest.py` (izole bir örneğe karşı; yavaş/yeniden bağlanan istemci, kayıt, ısınma süresi, `--json` ile saniyelik CPU/RSS; 5607/8080'i reddeder). Windows bağlantı sıfırlama denemesi: `python tools/repro_close_reset.py` (kendi izole sunucusunu açar ve kapatır).
 
 ## Arayüzü geliştirmek
 
@@ -107,14 +119,17 @@ npm run build                                  # frontend/dist (backend bunu ser
 | "Packets … do not match the FH6 format" | Gönderen FH6 değil (ör. Forza Motorsport "sled/dash"), ya da başka bir uygulama aynı porta yazıyor. Diagnostics → *Lengths seen*. |
 | "A second sender is transmitting" | Aynı porta iki kaynak gönderiyor; ilk kaynak susana kadar (3 s) ikincisi yok sayılır. |
 | "Data stale" | Oyun menüde/pause/rewind/replay'de. Son değerler soluk ve yaşıyla gösterilir. |
+| "Recording stopped: …" | Kayıt diske yazılamadı (ör. disk dolu). Canlı görünüm çalışmaya devam eder; o ana kadar kaydedilen kısım Sessions'ta. |
+| "The Pitwall server now serves a newer version of this page" | Arayüz yeniden derlendi; sayfayı yenileyin. |
 | Web portu dolu | Başlangıçta açık hata verir; `--web-port 8081`. |
 
-Loglar: `%LOCALAPPDATA%\HorizonPitwall\logs\pitwall.log` (1 MB × 3 dönen dosya).
+Loglar: `%LOCALAPPDATA%\HorizonPitwall\logs\pitwall.log` (1 MB × 3 dönen dosya; zaman UTC, olaylar `event=…` biçiminde, başlangıç satırında build ve instance kimliği).
 
 ## Belgeler
 
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) — paket şeması, kararlar, açık sorular, fixture kökeni
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — katmanlar, frame sözleşmesi, API, tradeoff'lar
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — katmanlar, kimlik ve zaman modeli, frame sözleşmesi, API, akış kontrolü, sınırlar
+- [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md) — kayıt dosyaları, tablolar, tutarlılık ve kurtarma
 - [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) — token'lar, bileşenler, durumlar, kontrast ölçümleri
 - [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — dış kaynak stratejisi (henüz entegrasyon yok)
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) — durum, testler, ölçümler, sıradaki iş

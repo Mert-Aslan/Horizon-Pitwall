@@ -31,11 +31,11 @@ Kaynak: Forza Support, *Forza Horizon 6 "Data Out" Documentation* —
 
 `TimestampMS` (U32, ms) — kural [`hub.py`](../backend/telemetry/hub.py) başında:
 
-- daha yeni → kabul; eşit → `duplicates`; önceki 2³²−600 000 üstünde ve yeni < 600 000 → **wraparound** (kabul);
+- daha yeni → kabul; eşit → `duplicates` (D-1, aşağıda; `equal_timestamp_policy`); önceki 2³²−600 000 üstünde ve yeni < 600 000 → **wraparound** (kabul);
 - en fazla 2000 ms geride ve son geçerli paket < 1 s önce → **out_of_order** (red, canlı snapshot'ı ezmez);
 - daha geride → **reset adayı**. Tek bir geri gidiş hiçbir şeyi sıfırlamaz; 3 ardışık ve kendi içinde artan aday gelirse reset kabul edilir. Arada orijinal akış devam ederse adaylar atılır.
 
-Gönderen adresi oturuma bağlanır. Başka bir adresten gelen geçerli paketler, bağlı kaynak 3 s susana kadar `foreign_source` olarak reddedilir ve Diagnostics → *Ignored senders* altında listelenir. Yeni kaynak = yeni `session_id`. Bu fazdaki `session_id` bir "canlı akış segmenti"dir; reset/araç değişimi yalnız olay olarak kaydedilir. Kayıt fazında (Faz 3) bunlar birlikte değerlendirilecek.
+Gönderen adresi **stream segment**'e bağlanır. Başka bir adresten gelen geçerli paketler, bağlı kaynak 3 s susana kadar `foreign_source` olarak reddedilir ve Diagnostics → *Ignored senders* altında listelenir (en çok 16 adres, 10 dk TTL). Yeni kaynak veya mod = yeni `stream_segment_id`; segmentte geçmiş, hız tahmini, araç kimliği ve sıra durumu sıfırdan başlar. `session_id` artık bu segment kimliğinin eskimiş takma adıdır. Zaman damgası reseti segmenti değiştirmez, olay olarak kaydedilir. Kimlik ve zaman modeli: [ARCHITECTURE.md](ARCHITECTURE.md#kimlik-ve-zaman). Alım sırası oyunun fizik sırasının kanıtı değildir; localhost'ta bile UDP'nin sırayı koruduğu varsayılmaz.
 
 UDP'de sıra numarası yoktur: `estimated_gaps` / `estimated_missing_packets`, `TimestampMS` farkının ortalama aralığa (EMA) oranından **tahmindir**; kesin paket kaybı yüzdesi iddia edilmez. 2 s'den uzun boşluk `interruptions` sayılır.
 
@@ -57,7 +57,7 @@ Ayrıca `traffic_warning`: son 2 s içinde reddedilen paket var ve durum `receiv
 
 `fixtures/synthetic/` — tamamı sentetik, `tools/make_fixtures.py` ile üretilir; paketler `tests/packets.py` içindeki elle yazılmış `struct.pack_into` offset'leriyle yazılır (şema modülünden bağımsız). `CarOrdinal` daima negatiftir; gerçek bir araç ID'si gibi kataloglanamaz. `manifest.json` her dosyanın beklenen sonucunu içerir.
 
-**Gerçek oyun yakalaması (fixture) henüz yok** (`real-game validation pending`).
+**Gerçek oyun yakalaması (fixture) henüz yok** (`real-game validation pending`). Yakalama aracı artık uygulamanın içinde (Diagnostics → *Diagnostic capture*); kişisel veri içermeyen kısa bir parça `fixtures/real/` altına manifest notuyla eklenecek.
 
 ### Pasif gözlem — 16 Kasım 2026 (yalnız okuma)
 
@@ -67,11 +67,14 @@ Kullanıcının 8080'de canlı modda çalışan örneğinden, durumuna dokunmada
 - Değerler little-endian okumayla tutarlı ve makul (ör. `EngineMaxRpm` 9999.995, `EngineIdleRpm` 799.9995, `Speed` 39.5 m/s, `Steer` 127 tam sağda, PI 916, `CarClass` 6) — P-2 için işaret.
 - Gönderen kaynak portu `5200` (belgedeki "oyun 5200–5300 arasında kendi soketini açar" ile tutarlı); gözlenen hız ~50 Hz, `TimestampMS` ortalama aralığı ~21.7 ms.
 - Lastik sıcaklıkları sürüşte ~98–210 aralığında görüldü. Bu Fahrenheit ile uyumlu olabilir, ama birim **hâlâ doğrulanmadı**; dönüşüm yapılmıyor (P-4).
-- **Açık bulgu D-1:** ilk okumada paketlerin ~%12'si (66 611'in 8 175'i) bir önceki kabul edilen paketle **aynı `TimestampMS`** taşıdığı için `duplicates` olarak reddedilmişti. Aynı oturumun ikinci okumasında (2 710 s, 160 848 paket) oran **%5.4**'e (8 672) inmişti: tekrarların neredeyse tamamı oturumun ilk dakikalarında birikmiş, sonra ~500 eklenmiş. Yani sürekli değil, belli durumlarda yoğunlaşıyor. Hangi durum olduğu ve içeriğin aynı olup olmadığı o sürümün sayaçlarından anlaşılamıyor.
-  - **Ölçüm eklendi (henüz gerçek veriyle çalışmadı):** hub artık her tekrarı önceki kabul edilen paketle karşılaştırıyor: `dup_identical` (byte byte aynı) / `dup_changed` (aynı zaman damgası, farklı içerik), tekrar anındaki `IsRaceOn`, değişen alanların sıklığı ve 5 örnek. Diagnostics → Packets bunları gösterir; `GET /api/v1/diagnostics` → `duplicate_analysis`. Politika değişmedi: tekrar yine reddedilir ve canlı değeri değiştirmez.
-  - Karar kuralı: `changed ≈ 0` ise tekrarlar gerçekten aynı paket, reddetmek kayıpsız. `changed` belirgin ise eşit zaman damgalı yeni içerik kabul edilmeli (UDP localhost'ta sırayı korur; aynı ms içinde gelen sonraki paket daha yeni sayılabilir) ve bu fixture + test ile sabitlenmeli.
-  - Toplama: kullanıcının çalışan örneği eski kodla çalışıyor; Pitwall yeniden başlatılıp birkaç dakika (menü/pause dahil) sürülünce sayaçlar dolar.
-- **Bulgu D-2:** 40 `car_change` olayının çoğu `4156 → 0 → 4156` biçiminde: zaman zaman `CarOrdinal = 0` taşıyan geçerli paketler geliyor (muhtemelen menü/yükleme anları; doğrulanmadı). Yeni sayaçlar `accepted_car_ordinal_zero` ve `accepted_race_off` bunu `IsRaceOn` ile ilişkilendirmeye yarar. Ordinal 0 doğrulanırsa olay listesinde ve araç kimliğinde "araç yok" olarak ele alınmalı.
+- **Açık bulgu D-1:** ilk okumada paketlerin ~%12'si (66 611'in 8 175'i) bir önceki kabul edilen paketle **aynı `TimestampMS`** taşıdığı için `duplicates` olarak reddedilmişti. Aynı oturumun ikinci okumasında (2 710 s, 160 848 paket) oran **%5.4**'e (8 672) inmişti: tekrarların neredeyse tamamı oturumun ilk dakikalarında birikmiş, sonra ~500 eklenmiş. Yani sürekli değil, belli durumlarda yoğunlaşıyor. O sürümün sayaçları içeriğin aynı olup olmadığını söyleyemiyordu.
+  - **Ölçüm (0.3.0):** her eşit zaman damgalı paket son kabul edilen paketle karşılaştırılır ve dört sınıftan birine girer: `identical` (byte byte aynı), `tail_only` (belgelenmiş 323 byte aynı, yalnız 324. byte farklı), `non_finite` (farklar yalnız NaN/Inf alanlarda), `changed` (en az bir sonlu alan farklı). Ayrıca tekrar anındaki `IsRaceOn`, değişen alanların sıklığı ve 5 örnek tutulur. Diagnostics → Packets ve `GET /api/v1/diagnostics` → `duplicate_analysis`.
+  - **Tanılama yakalaması:** Diagnostics → *Diagnostic capture* (30/60 s, boyut sınırlı) her datagram'ı alım sırası, monotonic süre, kaynak (isteğe bağlı maskeli), sonuç ve ham byte'larıyla `<data_dir>/captures/` altına yazar ve aynı sınıflandırmayla özet çıkarır. Mevcut ingest zincirine bağlanır; oyun portuna ikinci bir soket bağlanmaz.
+  - **Politika:** `equal_timestamp_policy` = `reject` (varsayılan, değişmedi) veya `accept_changed` (yalnız `changed`/`non_finite` sınıfı kabul edilir; `identical`/`tail_only` hâlâ tekrar). `accept_changed` modunda Δt = 0 hız/boşluk tahminine girmez (sıfıra bölme yok) ve alım sırası uygulamanın `sequence`'i ile ayrılır; aynı ms içindeki iki örneğin oyun içi sırası kesin sayılmaz. Testler: `tests/test_segments.py`.
+  - **Karar kuralı:** gerçek yakalamada `changed ≈ 0` ise tekrarlar gerçekten aynı paket, reddetmek kayıpsız. `changed` belirginse varsayılan `accept_changed` yapılır ve yakalamadan çıkarılan bir fixture ile sabitlenir. **Durum: gerçek veri bekleniyor** — kullanıcının 8080'de çalışan örneği 0.2.0 kodunu çalıştırıyor (16 Kasım 2026 21:2x'te okundu; yeni sayaçlar yok).
+- **Bulgu D-2:** 40 `car_change` olayının çoğu `4156 → 0 → 4156` biçimindeydi; sonra `0 → 2010 → 0` da görüldü (ikinci araçta da). Zaman zaman `CarOrdinal = 0` taşıyan geçerli paketler geliyor; anlamı belgelenmemiş (menü/yükleme anları olabilir, doğrulanmadı).
+  - **Model (0.3.0):** ham ordinal hiç değiştirilmez. `car_identity` durumları: `unknown`, `candidate` (yeni sıfırdan farklı değer gözleniyor), `confirmed` (en az 20 ardışık örnek **ve** 0.3 s), `temporarily_unavailable` (0/None geliyor; son onaylı kimlik korunur ama "canlı doğrulanmadı" diye işaretlenir), `unavailable` (10 s'den uzun 0). Yalnız onaylı A → B `car_change` olayı üretir; ilk onay `car_identified`, uzun yokluk bir kez `car_unavailable`. Eşikler sentetik fixture'larla seçildi ve geçicidir; gerçek yakalamayla gözden geçirilecek. Testler: geçici 0, gerçek A→B, iki araç arasında titreme, uzun bilinmeyen (`tests/test_segments.py`).
+  - 0'ın anlamı tüm oyun sürümleri için sabitlenmedi; `IsRaceOn` ile ilişkisi `accepted_race_off` / `accepted_car_ordinal_zero` sayaçları ve yakalamalarla incelenecek.
 
 ## Gerçek oyunla doğrulama listesi
 

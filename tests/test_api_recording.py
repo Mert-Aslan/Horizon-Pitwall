@@ -1,0 +1,153 @@
+"""API for build identity, recordings and diagnostic capture (isolated ports, tmp dirs)."""
+
+import json
+import socket
+import time
+
+import pytest
+from fastapi.testclient import TestClient
+
+from backend.api.app import create_app, is_benign_close_reset
+from backend.config import Config
+from backend.recording.recorder import Recorder
+from backend.recording.store import Store
+from backend.telemetry.capture import DiagnosticCapture, read_capture
+from backend.telemetry.hub import TelemetryHub
+from backend.telemetry.receiver import UdpReceiver
+
+from .packets import packet
+
+
+def wait_for(cond, timeout=5.0):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if cond():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+_TX = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # one sender = one bound source
+
+
+def send(port, data):
+    _TX.sendto(data, ("127.0.0.1", port))
+
+
+@pytest.fixture
+def client(tmp_path):
+    cfg = Config(udp_port=0, ui_rate_hz=60, extra_allowed_hosts=["testserver"])
+    hub = TelemetryHub()
+    rx = UdpReceiver(hub, "127.0.0.1", 0)
+    rec = Recorder(Store(tmp_path / "recordings"), app_version="test")
+    cap = DiagnosticCapture(tmp_path / "captures", app_version="test")
+    app = create_app(cfg, hub, rx, recorder=rec, capture=cap)
+    with TestClient(app) as c:
+        c.rx, c.hub, c.rec, c.cap = rx, hub, rec, cap
+        yield c
+
+
+def feed(c, n, ts0=100, **kw):
+    for i in range(n):
+        send(c.rx.port, packet(TimestampMS=ts0 + i * 16, **kw))
+    assert wait_for(lambda: c.hub.counters["received"] >= n)
+
+
+def test_build_identity(client):
+    b = client.get("/api/v1/build").json()
+    assert b["server_instance_id"] == client.hub.server_instance_id
+    assert len(b["backend_digest_full"]) == 64 and b["build_id"].startswith(b["app_version"] + "+")
+    assert b["commit"] is None  # not claimed
+    h = client.get("/api/v1/health").json()
+    assert h["build"]["server_instance_id"] == b["server_instance_id"]
+    caps = client.get("/api/v1/capabilities").json()
+    assert caps["features"]["recording"] is True and caps["equal_timestamp_policy"] == "reject"
+
+
+def test_hello_carries_instance_and_build(client):
+    with client.websocket_connect("/api/v1/stream") as ws:
+        hello = json.loads(ws.receive_text())
+        assert hello["server_instance_id"] == client.hub.server_instance_id
+        assert "ui_build_id" in hello and hello["build_id"]
+        first = json.loads(ws.receive_text())
+        assert first["status"]["recorder"]["state"] == "idle"
+
+
+def test_recording_lifecycle_over_http(client):
+    r = client.post("/api/v1/recordings/start", json={"title": "  Goliath  "})
+    assert r.status_code == 201 and r.json()["state"] == "recording"
+    rid = r.json()["recording_id"]
+    assert client.post("/api/v1/recordings/start", json={}).status_code == 409
+    feed(client, 40, Speed=20.0)
+    assert wait_for(lambda: client.rec.samples == 40)
+    assert client.get("/api/v1/health").json()["recorder"]["state"] == "recording"
+    stop = client.post("/api/v1/recordings/stop")
+    assert stop.status_code == 200 and stop.json()["state"] == "completed"
+    assert client.post("/api/v1/recordings/stop").status_code == 409
+    lst = client.get("/api/v1/recordings").json()
+    assert lst["recordings"][0]["id"] == rid and lst["recordings"][0]["title"] == "Goliath"
+    detail = client.get(f"/api/v1/recordings/{rid}").json()
+    assert detail["samples"] == 40 and detail["chunks"][0]["status"] == "ok"
+    p = client.patch(f"/api/v1/recordings/{rid}", json={"car_label": "Test car", "notes": "dry"}).json()
+    assert p["car_label"] == "Test car" and p["notes"] == "dry"
+    assert client.get(f"/api/v1/recordings/{rid}/verify").json()["ok"] is True
+    ov = client.get(f"/api/v1/recordings/{rid}/overview?points=20").json()
+    assert ov["samples_read"] == 40 and max(x for x in ov["speed_kmh_max"] if x is not None) == pytest.approx(72.0)
+    assert client.get("/api/v1/recordings/nope").status_code == 404
+
+
+def test_recording_control_needs_same_origin(client):
+    r = client.post("/api/v1/recordings/start", json={}, headers={"origin": "http://evil.example"})
+    assert r.status_code == 403 and client.rec.state == "idle"
+
+
+def test_recordings_unavailable_without_recorder():
+    app = create_app(Config(udp_port=0, extra_allowed_hosts=["testserver"]), TelemetryHub())
+    with TestClient(app) as c:
+        assert c.get("/api/v1/recordings").status_code == 503
+        assert c.get("/api/v1/capabilities").json()["features"]["recording"] is False
+
+
+def test_diagnostic_capture_over_http(client, tmp_path):
+    assert client.post("/api/v1/diagnostics/capture", json={"seconds": 1}).status_code == 422
+    r = client.post("/api/v1/diagnostics/capture", json={"seconds": 30, "mask_sources": True})
+    assert r.json()["state"] == "capturing"
+    assert client.post("/api/v1/diagnostics/capture", json={"seconds": 30}).status_code == 409
+    feed(client, 5, Speed=10.0)
+    send(client.rx.port, packet(TimestampMS=100 + 4 * 16, Speed=10.0))  # identical duplicate
+    send(client.rx.port, packet(TimestampMS=100 + 4 * 16, Speed=11.0))  # changed duplicate
+    send(client.rx.port, packet(length=232))  # invalid
+    assert wait_for(lambda: client.hub.counters["received"] == 8)
+    client.post("/api/v1/diagnostics/capture/stop")
+    client.cap.wait()
+    st = client.get("/api/v1/diagnostics/capture").json()
+    assert st["capture"]["state"] == "idle"
+    s = st["captures"][0]
+    assert s["datagrams"] == 8
+    assert s["equal_timestamp"] == {"identical": 1, "tail_only": 0, "non_finite": 0, "changed": 1}
+    assert s["outcomes"] == {"accepted": 5, "duplicates": 2, "rejected:too_short": 1}
+    header, records = read_capture(tmp_path / "captures" / s["file"])
+    assert header["sources_masked"] is True and {r["src"] for r in records} == {"source-1"}
+    assert [r["i"] for r in records] == list(range(8))  # arrival order
+
+
+def test_capture_size_limit_and_quota(tmp_path):
+    cap = DiagnosticCapture(tmp_path, max_bytes=2000, keep_files=2)
+    for k in range(3):
+        cap.start(30)
+        for i in range(20):
+            cap.tap(packet(TimestampMS=i), "a", "accepted")
+        cap.wait()
+        assert cap.status()["last_result"]["stop_reason"] == "size limit reached"
+        time.sleep(1.1)  # file names carry the start second
+    assert len(list(tmp_path.glob("capture-*.jsonl.gz"))) == 2
+
+
+def test_benign_proactor_reset_is_recognised_exactly():
+    class H:
+        def __repr__(self):
+            return "<Handle _ProactorBasePipeTransport._call_connection_lost()>"
+
+    assert is_benign_close_reset({"exception": ConnectionResetError(10054, "reset"), "handle": H()})
+    assert not is_benign_close_reset({"exception": ConnectionResetError(10054, "reset"), "handle": "<Handle other()>"})
+    assert not is_benign_close_reset({"exception": OSError("x"), "handle": H()})

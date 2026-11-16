@@ -20,6 +20,23 @@ export function Banners({ snap, view }: { snap: Snapshot; view: ViewState }) {
   const items: { tone: "info" | "warn" | "danger" | "demo"; text: string; action?: ReactNode }[] = [];
   if (snap.versionMismatch) {
     items.push({ tone: "danger", text: "This page and the Pitwall server are different versions. Reload the page." });
+  } else if (snap.uiBuildMismatch) {
+    items.push({
+      tone: "info",
+      text: "The Pitwall server now serves a newer version of this page.",
+      action: (
+        <button type="button" className="btn btn-small" onClick={() => location.reload()}>
+          Reload page
+        </button>
+      ),
+    });
+  }
+  if (snap.protocolError) {
+    items.push({ tone: "danger", text: `${snap.protocolError} Values may be out of date; reloading the page usually fixes a version mix-up.` });
+  }
+  const rec = snap.status?.recorder;
+  if (rec?.state === "failed" && rec.error) {
+    items.push({ tone: "danger", text: `Recording stopped: ${rec.error}. Live view keeps working; the part saved so far is in Sessions.` });
   }
   if (view.demo) {
     items.push({

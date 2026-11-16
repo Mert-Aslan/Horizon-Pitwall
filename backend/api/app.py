@@ -14,19 +14,34 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from ..buildinfo import BuildInfo
 from ..config import APP_NAME, APP_VERSION, Config
+from ..recording.recorder import Recorder, RecorderBusy, RecorderIdle
+from ..recording.store import EDITABLE, decode_datagram
+from ..telemetry import decode as dec
 from ..telemetry import schema
+from ..telemetry.capture import DiagnosticCapture
 from ..telemetry.hub import API_VERSION, TelemetryHub
 from ..telemetry.receiver import UdpReceiver
 from ..telemetry.synth import DEMO_CAR_ORDINAL, DemoGenerator
 
 log = logging.getLogger("pitwall.api")
+
+# Application-level flow control for the UI stream. OS socket buffers can hold several MB,
+# so a slow reader (weak Wi-Fi, busy phone) would otherwise see data tens of seconds old
+# while the server believes every send succeeded. A client that opts in acknowledges
+# every FLOW_ACK_EVERY messages; at most FLOW_WINDOW messages may be unacknowledged
+# (0.2 s at 30 Hz); a slow reader therefore sees at most about window / its own read
+# rate of backlog (measured: 1.3 s at 5 msg/s instead of 30-50 s without it). While
+# the window is full, frames are withheld (latest wins).
+FLOW_WINDOW = 6
+FLOW_ACK_EVERY = 2
 
 ROOT = Path(__file__).resolve().parents[2]
 # PITWALL_UI_DIST lets tests serve another UI build (e.g. a before/after comparison).
@@ -76,6 +91,34 @@ class DemoRequest(BaseModel):
     enabled: bool
 
 
+class StartRecording(BaseModel):
+    title: Optional[str] = None
+
+
+class RecordingPatch(BaseModel):
+    title: Optional[str] = None
+    notes: Optional[str] = None
+    car_label: Optional[str] = None
+    setup_label: Optional[str] = None
+
+
+class CaptureRequest(BaseModel):
+    seconds: float = 30
+    mask_sources: bool = False
+
+
+def is_benign_close_reset(context: dict) -> bool:
+    """Windows Proactor: when a browser drops a TCP connection abruptly (tab closed,
+    reload, sleep), asyncio's ``_call_connection_lost`` calls ``shutdown()`` on a socket
+    the peer already reset and logs WinError 10054 with a traceback. The connection is
+    already gone; nothing is lost. Only this exact case is recognised."""
+    exc = context.get("exception")
+    if not isinstance(exc, ConnectionResetError):
+        return False
+    where = repr(context.get("handle")) + str(context.get("message", ""))
+    return "_call_connection_lost" in where
+
+
 class FrameSignal:
     """Wakes every stream coroutine when the receiver thread accepts a frame."""
 
@@ -97,12 +140,36 @@ class UiClient:
         self.id = cid
         self.peer = peer
         self.frames_sent = 0
-        self.frames_skipped = 0  # display frames skipped because the client is slow
+        # Accepted frames not sent because of the UI rate limit (e.g. 60 Hz in, 30 Hz out).
+        # This is normal downsampling, not packet loss and not a slow client.
+        self.ui_rate_limited_frames = 0
+        self.slow_sends = 0  # a single send took longer than 250 ms (slow client / socket)
+        self.send_ms_max = 0.0
+        self.flow_control = False
+        self.flow_withheld_frames = 0  # frames not sent because the client had not caught up
+        self.flow_pauses = 0
         self.connected_at = time.time()
 
 
-def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] = None, demo: Optional[DemoGenerator] = None) -> FastAPI:
+def create_app(
+    cfg: Config,
+    hub: TelemetryHub,
+    receiver: Optional[UdpReceiver] = None,
+    demo: Optional[DemoGenerator] = None,
+    recorder: Optional[Recorder] = None,
+    capture: Optional[DiagnosticCapture] = None,
+    build: Optional[BuildInfo] = None,
+) -> FastAPI:
     demo = demo or DemoGenerator(hub)
+    build = build or BuildInfo(APP_VERSION, API_VERSION, schema.SCHEMA_VERSION, DIST)
+    build.server_instance_id = hub.server_instance_id
+    stream_stats = {"ws_send_timeouts": 0, "ws_closed": 0, "ws_errors": 0, "asyncio_close_resets": 0}
+    if recorder is not None:
+        hub.sample_sinks.append(recorder.offer)
+        hub.event_sinks.append(recorder.on_event)
+        hub.recorder_status = lambda: {k: v for k, v in recorder.status().items() if k != "last_result"}
+    if capture is not None:
+        hub.capture = capture
     clients: dict[int, UiClient] = {}
     next_id = [0]
     signal_box: dict[str, FrameSignal] = {}
@@ -110,6 +177,20 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         loop = asyncio.get_running_loop()
+        default_handler = loop.get_exception_handler()
+
+        def exception_handler(lp, context):
+            if is_benign_close_reset(context):
+                stream_stats["asyncio_close_resets"] += 1
+                # visible, one line, no traceback: the peer reset an already closing connection
+                log.info("event=client_reset_on_close the browser reset a closing connection (WinError 10054); nothing was lost")
+                return
+            if default_handler is not None:
+                default_handler(lp, context)
+            else:
+                lp.default_exception_handler(context)
+
+        loop.set_exception_handler(exception_handler)
         signal = signal_box["s"] = FrameSignal()
         hub.on_frame = lambda: loop.call_soon_threadsafe(signal.notify)
         if receiver is not None:
@@ -119,6 +200,8 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
             demo.start()
         yield
         hub.on_frame = None
+        if recorder is not None:
+            recorder.shutdown()
         demo.stop()
         if receiver is not None:
             receiver.stop()
@@ -155,9 +238,14 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
             "connection_state": st["connection_state"],
             "last_valid_packet_age_ms": st["packet_age_ms"],
             "mode": st["mode"],
-            "recorder": {"available": False, "note": "session recording is not part of this build yet"},
+            "recorder": st["recorder"] if recorder is not None else {"available": False},
             "ui_clients": len(clients),
+            "build": {k: v for k, v in build.as_dict().items() if k in ("build_id", "server_instance_id", "ui", "started_at_utc")},
         }
+
+    @app.get("/api/v1/build")
+    def build_info():
+        return build.as_dict()
 
     @app.get("/api/v1/telemetry/latest")
     def latest():
@@ -177,7 +265,8 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
                 "live": True,
                 "demo": True,
                 "raw_inspector": True,
-                "recording": False,
+                "recording": recorder is not None,
+                "diagnostic_capture": capture is not None,
                 "replay": False,
                 "analysis": False,
                 "car_catalog": False,
@@ -197,12 +286,23 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
             "raw_rate_hz": cfg.raw_rate_hz,
             "udp": {"host": cfg.udp_host, "port": receiver.port if receiver else cfg.udp_port},
             "lan": cfg.lan,
+            "lan_allow_control": cfg.lan_allow_control,
+            "server_instance_id": hub.server_instance_id,
+            "equal_timestamp_policy": hub.equal_timestamp_policy,
         }
 
     @app.get("/api/v1/diagnostics")
     def diagnostics():
         d = hub.diagnostics()
         d["ui_clients"] = [vars(c) for c in clients.values()]
+        d["stream"] = dict(stream_stats)
+        if recorder is not None:
+            d["recorder"] = recorder.status() | {
+                "mode_mismatch": recorder.mode_mismatch,
+                "flush_ms_max": round(recorder.flush_ms_max, 1),
+                "chunks_written": recorder.chunks_written,
+            }
+        d["build"] = build.as_dict()
         d["config"] = {k: v for k, v in cfg.public().items() if k not in ("data_dir",)}
         return d
 
@@ -216,6 +316,112 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
             hub.set_mode("live")
         return {"mode": hub.mode}
 
+    # ------------------------------------------------------------ recordings
+    def need_recorder() -> Recorder:
+        if recorder is None:
+            raise HTTPException(503, "recording is not available in this instance")
+        return recorder
+
+    @app.get("/api/v1/recordings")
+    def list_recordings():
+        r = need_recorder()
+        return {"recorder": r.status(), "recordings": r.store.list(), "reconciled_at_startup": r.reconciled}
+
+    @app.post("/api/v1/recordings/start", status_code=201)
+    def start_recording(req: StartRecording):
+        r = need_recorder()
+        try:
+            st = r.start(hub.mode, (req.title or "").strip()[:120] or None)
+        except RecorderBusy as e:
+            return JSONResponse({"error": "already_recording", "state": str(e), "recorder": r.status()}, status_code=409)
+        if st["state"] == "failed":
+            return JSONResponse({"error": "start_failed", "recorder": st}, status_code=500)
+        return st
+
+    @app.post("/api/v1/recordings/stop")
+    def stop_recording():
+        r = need_recorder()
+        try:
+            return r.stop("user")
+        except RecorderIdle as e:
+            return JSONResponse({"error": "not_recording", "state": str(e), "recorder": r.status()}, status_code=409)
+
+    @app.get("/api/v1/recordings/{rec_id}")
+    def get_recording(rec_id: str):
+        rec = need_recorder().store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        return rec
+
+    @app.patch("/api/v1/recordings/{rec_id}")
+    def patch_recording(rec_id: str, req: RecordingPatch):
+        store = need_recorder().store
+        changes = {k: (v.strip()[:2000] if isinstance(v, str) else v) for k, v in req.model_dump(exclude_unset=True).items() if k in EDITABLE}
+        if not store.update_metadata(rec_id, changes):
+            raise HTTPException(404, "recording not found")
+        return store.get(rec_id)
+
+    @app.get("/api/v1/recordings/{rec_id}/verify")
+    def verify_recording(rec_id: str):
+        try:
+            return need_recorder().store.verify(rec_id)
+        except KeyError:
+            raise HTTPException(404, "recording not found") from None
+
+    @app.get("/api/v1/recordings/{rec_id}/overview")
+    def recording_overview(rec_id: str, points: int = Query(600, ge=10, le=4000)):
+        """Speed envelope for the whole recording: per time bucket the min and max of
+        speed (peaks are preserved). Buckets without samples are null (gaps stay visible)."""
+        store = need_recorder().store
+        rec = store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        duration = rec["duration_s"] or (rec["chunks"][-1]["t_end_s"] if rec["chunks"] else 0.0) or 0.0
+        # never more buckets than ~half the samples, or a short recording looks dotted
+        points = max(10, min(points, rec["samples"] // 2))
+        width = max(duration / points, 1e-6)
+        lo: list = [None] * points
+        hi: list = [None] * points
+        n = 0
+        for line in store.iter_lines(rec_id):
+            res = dec.decode(decode_datagram(line))
+            if not res.ok:
+                continue
+            _, derived, _ = dec.normalize(res.raw)
+            v = derived["speed_kmh"]
+            if v is None:
+                continue
+            b = min(points - 1, int(line["el"] / width))
+            lo[b] = v if lo[b] is None else min(lo[b], v)
+            hi[b] = v if hi[b] is None else max(hi[b], v)
+            n += 1
+        return {"recording_id": rec_id, "duration_s": duration, "bucket_s": width, "speed_kmh_min": lo, "speed_kmh_max": hi, "samples_read": n}
+
+    # ------------------------------------------------------- diagnostic capture
+    def need_capture() -> DiagnosticCapture:
+        if capture is None:
+            raise HTTPException(503, "diagnostic capture is not available in this instance")
+        return capture
+
+    @app.get("/api/v1/diagnostics/capture")
+    def capture_status():
+        c = need_capture()
+        return {"capture": c.status(), "captures": c.list()}
+
+    @app.post("/api/v1/diagnostics/capture")
+    def capture_start(req: CaptureRequest):
+        c = need_capture()
+        try:
+            return c.start(req.seconds, req.mask_sources)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
+        except RuntimeError as e:
+            return JSONResponse({"error": "capture_busy", "state": str(e)}, status_code=409)
+
+    @app.post("/api/v1/diagnostics/capture/stop")
+    def capture_stop():
+        return need_capture().stop()
+
     # ------------------------------------------------------------ stream
     @app.websocket("/api/v1/stream")
     async def stream(ws: WebSocket):
@@ -226,7 +432,7 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
         next_id[0] += 1
         client = UiClient(next_id[0], f"{ws.client.host}:{ws.client.port}" if ws.client else "?")
         clients[client.id] = client
-        opts = {"raw": False, "force": True}
+        opts = {"raw": False, "force": True, "flow": False, "acked": 0}
         signal = signal_box.get("s") or FrameSignal()
 
         async def reader():
@@ -243,12 +449,24 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
                     elif msg.get("type") == "resync":
                         opts["force"] = True
                         signal.notify()
+                    elif msg.get("type") == "flow":
+                        opts["flow"] = client.flow_control = bool(msg.get("ack"))
+                    elif msg.get("type") == "ack" and isinstance(msg.get("n"), int):
+                        opts["acked"] = max(opts["acked"], msg["n"])
+                        signal.notify()
 
         reader_task = asyncio.create_task(reader())
         try:
             await ws.send_text(
-                json.dumps({"type": "hello", "api_version": API_VERSION, "schema_version": schema.SCHEMA_VERSION, "app_version": APP_VERSION, "ui_rate_hz": cfg.ui_rate_hz})
+                json.dumps({
+                    "type": "hello", "api_version": API_VERSION, "schema_version": schema.SCHEMA_VERSION, "app_version": APP_VERSION,
+                    "ui_rate_hz": cfg.ui_rate_hz, "server_instance_id": hub.server_instance_id,
+                    "ui_build_id": (build.ui() or {}).get("ui_build_id"), "build_id": build.as_dict()["build_id"],
+                    "flow": {"window": FLOW_WINDOW, "ack_every": FLOW_ACK_EVERY},
+                })
             )
+            sent_msgs = 1  # the hello counts; the client counts every message it receives
+            blocked = False
             period = 1.0 / cfg.ui_rate_hz
             raw_period = 1.0 / cfg.raw_rate_hz
             last_seq = -1
@@ -259,16 +477,36 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
             # skipped (latest wins). No fixed sleep tick, so Windows' coarse timer
             # resolution does not cap the rate. Heartbeat (status only) at 2 Hz.
             while not reader_task.done():
+                if opts["flow"] and sent_msgs - opts["acked"] >= FLOW_WINDOW:
+                    if not blocked:
+                        blocked = True
+                        client.flow_pauses += 1
+                    await signal.wait(0.05)  # an ack (or a new frame) wakes us
+                    continue
                 now = time.monotonic()
                 since = now - last_send
-                new = hub.sequence != last_seq
+                new = hub.publish_seq != last_seq
                 if (new and since >= period * 0.9) or opts["force"] or since >= 0.5:
                     want_raw = opts["raw"] and now - last_raw >= raw_period
                     seq, msg = hub.message(include_raw=want_raw)
                     if last_seq >= 0 and seq > last_seq + 1:
-                        client.frames_skipped += seq - last_seq - 1
-                    await asyncio.wait_for(ws.send_text(msg), timeout=2.0)
+                        if blocked:
+                            client.flow_withheld_frames += seq - last_seq - 1
+                        else:
+                            client.ui_rate_limited_frames += seq - last_seq - 1
+                    blocked = False
+                    t_send = time.perf_counter()
+                    try:
+                        await asyncio.wait_for(ws.send_text(msg), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        stream_stats["ws_send_timeouts"] += 1
+                        raise
+                    dt_ms = (time.perf_counter() - t_send) * 1000
+                    client.send_ms_max = max(client.send_ms_max, round(dt_ms, 2))
+                    if dt_ms > 250:
+                        client.slow_sends += 1
                     client.frames_sent += 1
+                    sent_msgs += 1
                     opts["force"] = False
                     last_seq, last_send = seq, now
                     if want_raw:
@@ -277,9 +515,13 @@ def create_app(cfg: Config, hub: TelemetryHub, receiver: Optional[UdpReceiver] =
                 # Wait for the next frame, or until the pending frame becomes due.
                 timeout = max(0.002, (period - since) if new else (0.5 - since))
                 await signal.wait(timeout)
-        except (WebSocketDisconnect, asyncio.TimeoutError, RuntimeError, ConnectionError):
+        except WebSocketDisconnect:
             pass
+        except (asyncio.TimeoutError, RuntimeError, ConnectionError) as e:
+            stream_stats["ws_errors"] += 1
+            log.info("event=ui_stream_error client=%s %s: %s", client.peer, type(e).__name__, e)
         finally:
+            stream_stats["ws_closed"] += 1
             reader_task.cancel()
             with contextlib.suppress(BaseException):
                 await reader_task

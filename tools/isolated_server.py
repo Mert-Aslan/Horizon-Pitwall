@@ -69,7 +69,7 @@ class IsolatedPitwall:
         if self.dist:
             env["PITWALL_UI_DIST"] = str(Path(self.dist).resolve())
         args = [sys.executable, str(ROOT / "forza_horizon_6_telemetry.py"), "--udp-port", str(self.udp_port), "--web-port", str(self.web_port),
-                "--data-dir", str(Path(os.environ.get("TEMP", ".")) / "pitwall-isolated")]
+                "--data-dir", str(Path(os.environ.get("TEMP", ".")) / f"pitwall-isolated-{self.web_port}")]
         if self.demo:
             args.append("--demo")
         flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0

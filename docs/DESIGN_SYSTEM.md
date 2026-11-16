@@ -42,9 +42,12 @@ Demo rozeti (`#1B1408` / accent) 9.59. Hepsi düz renkte 4.5:1 üzerinde. `stale
 
 | Bileşen | Kural |
 |---|---|
-| TopBar | marka, sekmeler (yalnız çalışan ekranlar: Live, Diagnostics), araç kimliği, Focus view düğmesi (yalnız Live'da), demo rozeti, bağlantı durumu. Durum şekil + metinle verilir (renk tek sinyal değil: dolu kare receiving, boş amber kare stale, kesikli kare waiting, kırmızı elmas error/offline). Hz ve paket yaşı küçük ve soluk (`text-3`, 12 px), ölçümlerin önüne geçmez. |
-| Car identity | `Car #<ordinal>` + nötr `name not known yet` etiketi (hata görünümü yok; katalog yok). Demo ordinal'i: `Demo car` + `synthetic`. `Class A`, `PI 700` gibi etiketli alanlar; nokta ile birleştirilmiş meta dizisi kullanılmaz. |
-| Banner | tonlar: demo, warn (stale, ikinci gönderici), danger (sunucu kopuk, geçersiz paket, sürüm uyumsuzluğu). Ne olduğunu ve ne yapılacağını söyler. |
+| TopBar | marka, sekmeler (yalnız çalışan ekranlar: Live, Sessions — yalnız sunucu kaydı destekliyorsa —, Diagnostics), araç kimliği, kayıt kontrolü, Focus view düğmesi (yalnız Live'da), demo rozeti, bağlantı durumu. Durum şekil + metinle verilir (renk tek sinyal değil: dolu kare receiving, boş amber kare stale, kesikli kare waiting, kırmızı elmas error/offline). Hz ve paket yaşı küçük ve soluk (`text-3`, 12 px), ölçümlerin önüne geçmez. |
+| Car identity | sunucunun `car_identity` durumuna göre: onaylı → `Car #<ordinal>` + `name not known yet`; geçici 0 → son onaylı kimlik + `id not sent right now` (canlı doğrulanmadığı tooltip'te); aday → `checking id`; uzun yokluk → `No car id`. Ham 0 hiçbir zaman araç adı gibi gösterilmez. Demo ordinal'i: `Demo car` + `synthetic`. `Class A`, `PI 700` gibi etiketli alanlar; nokta ile birleştirilmiş meta dizisi kullanılmaz. |
+| Banner | tonlar: demo, info (sunucu daha yeni bir arayüz sunuyor + `Reload page`), warn (stale, ikinci gönderici), danger (sunucu kopuk, geçersiz paket, sürüm uyumsuzluğu, okunamayan mesajlar, kayıt başarısız). Ne olduğunu ve ne yapılacağını söyler. |
+| Record control | üst şeritte, Focus düğmesinden önce. Kayıt geleneği: boş kırmızı halka `Record`; kayıtta dolu kırmızı nokta + `Stop`, yanında süre ve örnek sayısı, düşen örnek varsa kırmızı. Durum **sunucudan** gelir (WS `status.recorder`); tıklama kendini kayıtta saymaz, `Saving…` sırasında devre dışı. LAN'dan 403 anlaşılır metinle. Telefonda süre/sayı gizlenir, düğme kalır. |
+| Sessions | solda kayıt listesi (başlık veya başlangıç zamanı, süre, örnek, tepe hız, kullanıcı araç etiketi; seçili satır amber sol kenar), sağda detay: durum etiketi (`saved`, `recovered after a crash`, `failed`…), tüm kayıt hız zarfı (bucket başına min–max, boşluk boş kalır, ResizeObserver ile yeniden çizim), somut sayaçlar (örnek, düşen, kayıp, segment, kapsama, 250 ms üstü boşluk, tepe/ortalama hız, onaylı araç kimlikleri), etiket formu (başlık, araç, setup/tune, not — "oyun tuning göndermez" notu), `Check files` bütünlük kontrolü, olay listesi. Uydurma kalite skoru yok; replay düğmesi M3'e kadar yok. Boş durum: Record'un nasıl kullanılacağı. |
+| Diagnostic capture | Diagnostics'te: 30/60 s düğmesi, "gönderici adreslerini gizle" seçeneği, kalan süre, son yakalamanın sınıf özeti. |
 | DemoButton | bekleme durumu (`Starting demo…`, disabled + `aria-busy`) ve hata metni (`role="alert"`; LAN'dan 403 gelirse "this device may only view"). |
 | ShiftBand | 48 segment, rpm/max_rpm oranı; %85 üstü amber, %95 üstü kırmızı (genel görsel bölge, araç bazlı ideal vites noktası değildir). Sağda rpm (5ch sabit genişlik) ve alt alta `max` / `idle`. |
 | Cluster | yalnız vites ve hız. Vites 2ch, ortalı; hız 3ch, **sağa yaslı**, birler basamağı yerinde kalır (smoke test sağ kenarın sabitliğini ölçer). Birim/etiket (`gear`, `km/h`) sayının altında, 15 px, `text-2`, ağırlık 500. Vites 0: `0` + "R/N code, unverified". |
@@ -59,7 +62,7 @@ Demo rozeti (`#1B1408` / accent) 9.59. Hepsi düz renkte 4.5:1 üzerinde. `stale
 
 ## Durumlar
 
-waiting · starting · receiving · stale (soluk + yaş) · error (mesajla) · sunucu kopuk (donmuş değerler + yeniden deneme sayacı) · geçersiz paket · ikinci gönderici · demo · araç bilinmiyor · sürüm uyumsuzluğu. Kayıt/disk/replay/provider durumları ilgili özellikler gelince eklenecek; şimdilik arayüzde sahte karşılıkları yok.
+waiting · starting · receiving · stale (soluk + yaş) · error (mesajla) · sunucu kopuk (donmuş değerler + yeniden deneme sayacı) · geçersiz paket · ikinci gönderici · demo · araç kimliği durumları · sürüm uyumsuzluğu · daha yeni UI · okunamayan mesaj · kayıt (idle / recording / saving / failed, düşen örnek) · kayıt listesi boş / yüklenemedi. Replay ve provider durumları özellikleri gelince eklenecek.
 
 ## Responsive
 
@@ -70,13 +73,14 @@ waiting · starting · receiving · stale (soluk + yaş) · error (mesajla) · s
 | 901–1400 px (1366×768, %200 zoom) | 2 kolon: [vites/hız \| girişler], [lastikler \| car output], altta trace; vites/hız 12.5vw |
 | 701–900 px (768 px tablet) | 2 kolon üstte, lastikler/car output/trace tam genişlik |
 | 601–700 px | tek kolon |
-| ≤ 600 px (telefon) | ilk ekranda devir, vites/hız, gaz/fren, direksiyon; ardından teker durumu. Güç satırı, trace ve yarış tablosu gizli (masaüstü kolonları aşağı yığılmaz). |
+| ≤ 600 px (telefon) | üst şerit 3 satır: sekmeler / araç / kayıt + bağlantı durumu. İlk ekranda devir, vites/hız, gaz/fren, direksiyon; ardından teker durumu. Güç satırı, trace ve yarış tablosu gizli. Sessions tek kolon (liste üstte, en çok %40 yükseklik). |
+| ≤ 800 px | Sessions tek kolon; ≤ 1100 px'de detaydaki sayaçlar ve form alt alta. |
 
 Gerçek tarayıcıda (Chromium) render edilip görüntüsü alınanlar: 1920×1080, 2560×1440, 1366×768, 768×1024, 390×844 ve 960×540 (= 1920×1080'de %200 zoom). Hepsinde yatay sayfa kaydırması yok (`scrollWidth == viewport`). 1366×768'de Live dikey kaydırma gerektirir (1324 px). Uzun araç adı testi katalog gelince yapılacak (şu an yalnız `Car #<ordinal>` var; `.car-name` ellipsis ile kesilir). Karşılaştırmalı görüntüler: `docs/screenshots/compare/` (`before-*` / `after-*`, aynı deterministik sentetik akış).
 
 ## Erişilebilirlik ve hareket
 
-Görünür `:focus-visible` halkası, "Skip to content", `aria-current` sekmeler, `aria-pressed` geçiş düğmeleri (Focus view, Pause, Expand), etiketli filtre ve ölçek seçimi, `role="meter"` pedal/direksiyon/debriyaj/el freni, `role="group"` + adlı teker hücreleri. `role="status" aria-live="polite"` yalnız bağlantı durumu metninde (30 Hz değerler okunmaz).
+Görünür `:focus-visible` halkası, "Skip to content", `aria-current` sekmeler, `aria-pressed` geçiş düğmeleri (Focus view, Pause, Expand), etiketli filtre ve ölçek seçimi, `role="meter"` pedal/direksiyon/debriyaj/el freni, `role="group"` + adlı teker hücreleri. `role="status" aria-live="polite"` yalnız bağlantı durumu metninde (30 Hz değerler okunmaz). Kayıt süresi `aria-live="off"` (her saniye okunmaz); kayıt hatası ve kontrol hataları `role="alert"`; yakalama durumu, etiket kaydetme ve bütünlük sonucu `role="status"`. Sessions satırları düğmedir (`aria-current`), hız zarfı `role="img"` + açıklayıcı `aria-label`.
 
 Trace canvas'ı klavyeyle odaklanabilir bir `role="slider"`: ←/→ 0.1 s, Shift ile 1 s, Home/End uçlar, Space/Enter duraklat/devam, Escape canlıya dön ve imleci kaldır. İmlecin değerleri hem görünür okuma satırında hem `aria-valuetext` içinde metin olarak bulunur ("−1.1 s: speed 116 km/h, throttle 100%, …"); bu metin yalnız kullanıcı imleci klavyeyle taşıdığında güncellenir, canlı akışla okunmaz.
 

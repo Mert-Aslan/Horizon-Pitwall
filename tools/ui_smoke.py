@@ -10,6 +10,9 @@ Covers: demo labelling and live values, Diagnostics inspector + filter, Focus vi
 its persistence, chart keyboard inspection, pause / back to live while data keeps
 arriving, demo stop feedback, waiting -> receiving -> stale with dimmed values, server
 restart and reconnect, phone and 200 %-zoom widths, console/page errors.
+0.3.0 additions: background tab keeps its WebSocket (F-01), Record/Stop mirrors the
+server state, Sessions list/detail/labels/integrity check, a recording keeps running with
+the page closed, diagnostic capture from the UI, new server instance after restart.
 Exits non-zero if any check fails.
 """
 
@@ -50,6 +53,11 @@ def wait_until(fn, timeout=8.0, step=0.1) -> bool:
     return False
 
 
+WS_COUNTER = """(() => { const W = window.WebSocket; window.__ws = {made: 0, closed: 0};
+  function Counted(u, p) { const s = new W(u, p); window.__ws.made++; s.addEventListener('close', () => window.__ws.closed++); return s; }
+  Counted.prototype = W.prototype; Counted.OPEN = 1; Counted.CLOSED = 3; window.WebSocket = Counted; })();"""
+
+
 def canvas_hash(page) -> str:
     return page.evaluate("() => { const c = document.querySelector('.trace-canvas'); return c ? c.toDataURL().length + ':' + c.toDataURL().slice(-64) : ''; }")
 
@@ -69,6 +77,9 @@ def main() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(viewport={"width": 1920, "height": 1080})
+        # Count WebSocket constructions/closes inside the page (Playwright's "websocket"
+        # event did not report the reconnects of the 0.2.0 bundle reliably).
+        ctx.add_init_script(WS_COUNTER)
         page = ctx.new_page()
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -173,7 +184,82 @@ def main() -> int:
             feeder = Feeder(a.udp_port, 6.0)
             feeder.start()
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "synthetic live feed is received")
-            check(page.locator(".car-name").inner_text() == "Car #-2", "unknown car shown by id")
+            check(wait_until(lambda: page.locator(".car-name").inner_text() == "Car #-2"), "unknown car shown by id")
+
+            # F-01 in a real browser. Headless Chromium does not hide a tab that is moved to
+            # the background, so the background condition that matters - requestAnimationFrame
+            # not running - is reproduced by holding back rAF callbacks for 6 s while data
+            # keeps arriving. (0.2.0 closed the socket after ~3 s in this situation.)
+            n_sock = page.evaluate("window.__ws.made")
+            page.evaluate("""() => { window.__rafHeld = []; window.__rafOrig = window.requestAnimationFrame;
+                window.requestAnimationFrame = (cb) => { window.__rafHeld.push(cb); return 0; }; }""")
+            page.wait_for_timeout(6000)
+            held = page.evaluate("window.__rafHeld.length")
+            n_after = page.evaluate("window.__ws.made")
+            check(n_after == n_sock, f"no reconnect while rAF is suspended and data arrives ({n_sock} -> {n_after} sockets, {held} rAF held)")
+            page.evaluate("() => { window.requestAnimationFrame = window.__rafOrig; window.__rafHeld.forEach((cb) => cb(performance.now())); }")
+            check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "page shows Receiving again when rAF resumes")
+
+            # recording: the button mirrors the server, Sessions shows the result
+            rec_btn = page.locator(".rec-btn")
+            check(rec_btn.inner_text().strip().endswith("Record"), "Record button shown")
+            rec_btn.click()
+            check(wait_until(lambda: page.locator(".rec-btn-on").count() == 1), "Record turns into Stop once the server records")
+            check(wait_until(lambda: "samples" in page.locator(".rec-meta").first.inner_text()), "recording shows elapsed time and samples")
+            page.wait_for_timeout(2500)
+            if out:
+                page.screenshot(path=str(out / "recording-1920.png"))
+            page.locator(".rec-btn").click()
+            check(wait_until(lambda: page.locator(".rec-btn-on").count() == 0), "Stop returns to Record")
+            page.get_by_role("button", name="Sessions").click()
+            check(wait_until(lambda: page.locator(".session-row").count() >= 1), "Sessions lists the recording")
+            check(wait_until(lambda: int(page.locator(".session-detail .kv div:has(dt:text('Samples saved')) dd").inner_text().replace(",", "").replace(".", "")) > 100), "detail shows saved samples")
+            page.get_by_role("button", name="Check files").click()
+            check(wait_until(lambda: "match their checksums" in page.locator(".session-detail").inner_text()), "integrity check passes in the UI")
+            page.get_by_label("Car (your label)").fill("Smoke car")
+            page.get_by_role("button", name="Save labels").click()
+            check(wait_until(lambda: "Saved." in page.locator(".session-detail").inner_text()), "labels saved")
+            check(wait_until(lambda: "Smoke car" in page.locator(".session-row").first.inner_text()), "list shows the new label")
+            check(page.locator(".overview-canvas").count() == 1, "speed overview drawn")
+            if out:
+                page.screenshot(path=str(out / "sessions-1920.png"))
+                page.set_viewport_size({"width": 390, "height": 844})
+                page.wait_for_timeout(400)
+                check(page.evaluate("document.documentElement.scrollWidth") <= 390, "no horizontal scroll on Sessions at 390 px")
+                page.screenshot(path=str(out / "sessions-390.png"), full_page=True)
+                page.set_viewport_size({"width": 1920, "height": 1080})
+
+            # a recording does not depend on the page: start, close page, stop via API
+            page.get_by_role("button", name="Live").click()
+            page.locator(".rec-btn").click()
+            check(wait_until(lambda: page.locator(".rec-btn-on").count() == 1), "second recording started")
+            page.close()
+            time.sleep(2.0)
+            import json as _json
+            import urllib.request as _rq
+            st = _json.load(_rq.urlopen(f"{url}api/v1/health"))["recorder"]
+            check(st["state"] == "recording" and st["samples"] > 60, f"recording continues with no page open ({st['state']}, {st['samples']} samples)")
+            page = ctx.new_page()
+            page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+            page.on("pageerror", lambda e: errors.append(str(e)))
+            page.goto(url)
+            page.wait_for_selector(".speed-num", timeout=10_000)
+            check(wait_until(lambda: page.locator(".rec-btn-on").count() == 1), "reopened page shows the running recording")
+            page.locator(".rec-btn").click()
+            check(wait_until(lambda: page.locator(".rec-btn-on").count() == 0), "recording stopped from the reopened page")
+
+            # diagnostic capture from the UI
+            page.get_by_role("button", name="Diagnostics").click()
+            page.get_by_role("button", name="Capture 30 s").click()
+            check(wait_until(lambda: "Capturing" in page.locator("#capture-title").locator("xpath=..").inner_text()), "capture runs")
+            page.wait_for_timeout(1500)
+            page.evaluate("fetch('/api/v1/diagnostics/capture/stop', {method: 'POST'})")
+            check(wait_until(lambda: "Last capture" in page.locator("#capture-title").locator("xpath=..").inner_text()), "capture summary shown")
+            if out:
+                page.screenshot(path=str(out / "diagnostics-capture-1920.png"), full_page=True)
+            page.get_by_role("button", name="Live").click()
+            page.wait_for_selector(".speed-num")
+            inst0 = page.evaluate("fetch('/api/v1/build').then(r => r.json()).then(j => j.server_instance_id)")
             feeder.stop_ev.set()
             feeder.join(2)
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Data stale", timeout=4), "silence turns into Data stale")
@@ -193,6 +279,9 @@ def main() -> int:
         check(page.locator(".banner-danger").count() >= 1, "lost-connection banner shown")
         with IsolatedPitwall(a.web_port, a.udp_port):
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Waiting for data", timeout=15), "page reconnects after server restart")
+            inst1 = page.evaluate("fetch('/api/v1/build').then(r => r.json()).then(j => j.server_instance_id)")
+            check(inst1 != inst0, "restarted server reports a new instance id")
+            check(page.locator(".banner-info").count() == 0, "no false 'newer UI' banner when the bundle did not change")
 
         real_errors = [e for e in errors if "WebSocket" not in e and "ERR_CONNECTION_REFUSED" not in e]
         check(not real_errors, f"no console/page errors apart from the deliberate server stop ({real_errors[:3]})")

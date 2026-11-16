@@ -8,5 +8,10 @@
   "extra_allowed_hosts": [],
   "stale_after_ms": 750,
   "ui_rate_hz": 30,
-  "raw_rate_hz": 4
+  "raw_rate_hz": 4,
+  "data_dir": "",
+  "log_level": "INFO",
+  "equal_timestamp_policy": "reject",
+  "recorder_queue_size": 20000,
+  "diagnostic_capture_max_mb": 16
 }

@@ -81,9 +81,14 @@ describe("view state", () => {
     hello: null,
     status: status({}),
     frame: null,
+    raw: null,
     lastMessageAt: 0,
     retryAt: null,
     versionMismatch: false,
+    uiBuildMismatch: false,
+    serverRestarts: 0,
+    protocolError: null,
+    badMessages: 0,
     ...over,
   });
   it("server link loss overrides the last server status", () => {

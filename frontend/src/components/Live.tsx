@@ -120,7 +120,7 @@ function Inputs({ frame, compactAux }: { frame: Frame | null; compactAux?: boole
           <span>Left</span>
           <span>Right</span>
         </div>
-        {outOfRange && <p className="note">Raw steer {frame?.raw?.Steer ?? "-128"} is outside the documented −127…127 range; shown clamped.</p>}
+        {outOfRange && <p className="note">Raw steer is outside the documented −127…127 range ({frame?.quality.fields["Steer"]?.detail ?? "raw value"}); shown clamped.</p>}
       </div>
       {!expanded && !compactAux && (
         <div className="aux-inputs">

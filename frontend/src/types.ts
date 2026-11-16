@@ -15,9 +15,42 @@ export interface Status {
   receiver_state: "starting" | "listening" | "error" | "stopped";
   receiver_error: string | null;
   receiver_address: string | null;
+  server_instance_id?: string;
+  stream_segment_id?: string | null;
+  /** deprecated alias of stream_segment_id */
   session_id: string | null;
   source: string | null;
+  /** per stream segment; compare only together with the segment id */
   sequence: number;
+  recorder?: RecorderStatus | null;
+}
+
+export interface RecorderStatus {
+  state: "idle" | "starting" | "recording" | "stopping" | "completed" | "failed";
+  recording_id: string | null;
+  mode: Mode | null;
+  elapsed_s: number | null;
+  samples: number;
+  dropped: number;
+  queue: number;
+  queue_high_watermark: number;
+  error: string | null;
+}
+
+export interface CarIdentityState {
+  status: "unknown" | "candidate" | "confirmed" | "temporarily_unavailable" | "unavailable";
+  confirmed_ordinal: number | null;
+  candidate_ordinal: number | null;
+  raw_ordinal: number | null;
+  live_verified: boolean;
+}
+
+export interface RawSample {
+  values: Record<string, number | null>;
+  sequence: number;
+  streamKey: string;
+  /** performance.now() ms when the message carrying it arrived */
+  receivedAt: number;
 }
 
 export interface Wheel {
@@ -93,10 +126,17 @@ export interface FieldQuality {
 export interface Frame {
   schema_version: number;
   api_version: number;
+  server_instance_id?: string;
+  stream_segment_id?: string;
+  /** deprecated alias of stream_segment_id */
   session_id: string;
   sequence: number;
   game_timestamp_ms: number;
+  /** process monotonic ms since the stream segment started (for intervals) */
+  segment_elapsed_ms?: number;
+  /** UTC wall clock ms (for humans, not for intervals) */
   received_at: number;
+  car_identity?: CarIdentityState;
   mode: Mode;
   source: string;
   raw?: Record<string, number | null>;
@@ -117,6 +157,10 @@ export interface Hello {
   schema_version: number;
   app_version: string;
   ui_rate_hz: number;
+  server_instance_id?: string;
+  ui_build_id?: string | null;
+  build_id?: string;
+  flow?: { window: number; ack_every: number };
 }
 
 export interface FieldSpec {
@@ -137,4 +181,44 @@ export interface Capabilities {
   demo_car_ordinal: number;
   udp: { host: string; port: number };
   lan: boolean;
+}
+
+export interface RecordingSummary {
+  speed_kmh_max: N;
+  speed_kmh_mean: N;
+  cars_confirmed: Record<string, number>;
+  samples_without_confirmed_car: number;
+  gaps_over_250ms: number;
+  gap_time_s: number;
+  covered_s: number;
+  coverage: N;
+}
+
+export interface Recording {
+  id: string;
+  status: "recording" | "completed" | "failed" | "recovered" | "incomplete";
+  mode: Mode;
+  title: string | null;
+  notes: string | null;
+  car_label: string | null;
+  setup_label: string | null;
+  started_utc: string;
+  ended_utc: string | null;
+  duration_s: N;
+  samples: number;
+  dropped: number;
+  lost_on_stop: number;
+  segments: number;
+  app_version: string;
+  decoder: string;
+  chunk_format: string;
+  stop_reason: string | null;
+  error: string | null;
+  summary: RecordingSummary | null;
+}
+
+export interface RecordingDetail extends Recording {
+  segments_detail: { segment_index: number; stream_segment_id: string; source: string; first_sample: number; start_elapsed_s: number }[];
+  chunks: { chunk_index: number; file: string; samples: number; t_start_s: number; t_end_s: number; bytes: number; status: string }[];
+  events: { sample_index: number | null; elapsed_s: number | null; type: string; detail: string; stream_segment_id: string | null }[];
 }
