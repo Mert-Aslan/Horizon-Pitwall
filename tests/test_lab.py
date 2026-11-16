@@ -41,6 +41,7 @@ def expected_from_normalize(data: bytes) -> dict:
         "steer": pct(n["inputs"]["steer"]), "power": d["power_kw"], "torque": n["torque_nm"], "boost": n["boost_psi"],
         "fuel": pct(n["fuel_fraction"]), "g_lat": d["g_lateral"], "g_long": d["g_longitudinal"], "g_vert": d["g_vertical"],
         "yaw_rate": None if n["motion"]["angular_velocity_rad_s"]["y"] is None else math.degrees(n["motion"]["angular_velocity_rad_s"]["y"]),
+        "vel_long": None if n["motion"]["velocity_local_mps"]["z"] is None else n["motion"]["velocity_local_mps"]["z"] * 3.6,
         **{f"slip_{k}": w[k]["combined_slip"] for k in ("fl", "fr", "rl", "rr")},
         **{f"susp_{k}": pct(w[k]["suspension_norm"]) for k in ("fl", "fr", "rl", "rr")},
         **{f"temp_{k}": w[k]["tire_temp"] for k in ("fl", "fr", "rl", "rr")},

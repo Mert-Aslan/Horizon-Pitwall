@@ -3,8 +3,10 @@
 // overview).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmt } from "../format";
+import { usePref } from "../prefs";
 import type { Snapshot } from "../stream";
 import type { Recording, RecordingDetail } from "../types";
+import { Runs } from "./Runs";
 import { clock } from "./TopBar";
 
 const STATUS_TEXT: Record<Recording["status"], string> = {
@@ -299,7 +301,24 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
   );
 }
 
-export function Sessions({ snap, onReplay, onAnalyze }: { snap: Snapshot; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
+export function Sessions(props: { snap: Snapshot; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
+  const [view, setView] = usePref("sessionsView", ["recordings", "runs"] as const, "recordings");
+  return (
+    <>
+      <div className="seg" role="group" aria-label="Sessions view">
+        <button type="button" className="btn btn-small btn-quiet" aria-pressed={view === "recordings"} onClick={() => setView("recordings")}>
+          Recordings
+        </button>
+        <button type="button" className="btn btn-small btn-quiet" aria-pressed={view === "runs"} onClick={() => setView("runs")}>
+          Runs &amp; comparison
+        </button>
+      </div>
+      {view === "runs" ? <Runs /> : <Recordings {...props} />}
+    </>
+  );
+}
+
+function Recordings({ snap, onReplay, onAnalyze }: { snap: Snapshot; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
   const rec = snap.status?.recorder;
   const active = rec?.state === "recording" || rec?.state === "stopping";
   const [nonce, setNonce] = useState(0);

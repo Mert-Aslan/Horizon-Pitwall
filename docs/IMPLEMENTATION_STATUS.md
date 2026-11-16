@@ -1,6 +1,6 @@
 # Uygulama durumu
 
-Son güncelleme: 16 Kasım 2026 · **Sürüm 0.5.0** (backend `APP_VERSION` 0.5.0, frontend `package.json` 0.5.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
+Son güncelleme: 17 Kasım 2026 · **Sürüm 0.6.0** (backend `APP_VERSION` 0.6.0, frontend `package.json` 0.6.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
 
 ## Güncel durum
 
@@ -11,7 +11,8 @@ Son güncelleme: 16 Kasım 2026 · **Sürüm 0.5.0** (backend `APP_VERSION` 0.5.
 | **M2** manuel kayıt + Sessions + kurtarma | ✅ | **gerçek oyunla doğrulandı**: 484 s, 25 703 örnek, 0 düşen, dosya kontrolü geçti |
 | **M3** istemciye özel replay | ✅ | gerçek 8 dk kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M4** Telemetry Lab + olaylar + notlar + CSV | ✅ | gerçek kaydın kopyasıyla tarayıcıda doğrulandı |
-| M5–M6 | ⏳ | performans denemeleri / setup A-B; katalog, dağıtım |
+| **M5** performans denemeleri + iki denemeyi karşılaştırma | ✅ (ilk sürüm) | gerçek kayıtta 17 geçerli deneme; mesafe/rota bazlı delta yok |
+| M6 | ⏳ | araç kataloğu, Windows dağıtımı |
 
 Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçek tarayıcı testi** (headless Chromium), **pasif oyun gözlemi** (kullanıcının çalışan örneğinden salt okuma), **kontrollü gerçek oyun doğrulaması** (henüz yok).
 
@@ -30,6 +31,15 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 | WinError 10054 logu | kullanıcının logunda 1 kez (15:20:50) | yalnız tam bu durum tek satır INFO + sayaç; diğerleri varsayılan işleyicide | yeniden üretilemedi (0.2.0 ve 0.3.0 backend, 4 desen × 5); **tetikleyici açık** |
 
 **Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. Baseline commit `716cbc5` üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
+
+### 0.6.0 — M5 performans denemeleri ve karşılaştırma
+
+- **Canlı:** Live → Car output altında *Performance run*: tür seç (0–100, 100–200, 100–0 fren), **Arm**; durum sunucudan gelir (Armed / Ready / Measuring + kronometre / sonuç veya "Not valid — neden"). Algılayıcı hub'ın örnek akışında çalışır (kilit altında yalnız bir datagram açılır, G/Ç yok). Sonucu saklamak için sürüşü kaydetmek yeterli: kayıtlar da aynı algılayıcıyla taranır.
+- **Kayıtlar:** Sessions → *Runs & comparison*: tüm kayıtlardaki denemeler, tür ve "Valid only" filtresi, en iyi süre işaretli; kullanıcının araç/setup etiketi ve PI yanında. Sonuçlar SQLite'ta `runs` tablosunda (algılayıcı sürümü + örnek sayısı anahtarlı) önbelleklenir; süren kayıt önbelleklenmez.
+- **Karşılaştırma:** iki deneme seçilince fark ("B 0.11 s yavaş · 3.6 m uzun"), kendi başlangıçlarına hizalı hız eğrileri, tablo (süre, mesafe, araç, setup etiketi, PI, tarih, en büyük örnek boşluğu) ve sınırlar: farklı araç / PI, demo verisi, eksik setup etiketi, verideki olmayan koşullar (yol, yüzey, hava, eğim).
+- **Kurallar ve geçersizlik:** [PROTOCOL.md](PROTOCOL.md#performans-denemeleri-m5). Testler 15 senaryoyu kapsar: interpolasyonlu süre ve mesafe, boşluk arkasından başlangıç uydurmama, beş veri sorunu, ölçüm sırasında boşluk, yanlış başlangıç (20 km/h altı gürültü sayılır), geri gitme, 100–200 kuralları, fren kuralları, viraj frenlemesinin deneme sayılmaması, canlı kurma.
+- **Gerçek kayıt (kopya, izole örnek):** 0–100 km/h 1.71 s / 2.62 s, 100–200 km/h 15 geçerli deneme (1.48–1.94 s), veri sorunuyla biten 2 frenleme; ilk tarama 1.3 s, sonra önbellekten.
+- **Bulunan ve düzeltilen:** kanvas çizim durumu (metin hizası) yeniden çizimler arasında kalıyordu ve karşılaştırma grafiğinin eksen etiketlerini yarıya kesiyordu; `fitCanvas` artık her çizimde varsayılanlara döner (G-G'yi de etkiliyordu).
 
 ### 0.5.0 — M4 Telemetry Lab
 
@@ -85,10 +95,10 @@ Yük testindeki yavaş istemci (5 mesaj/s okuyan) **29.6 s (p50) / 50.6 s (max)*
 
 | Komut | Sonuç |
 |---|---|
-| `python -m pytest` | **215 passed** (0.4.0: +1 replay pencere API'si; 0.5.0: +18 Lab — kanalların normalizer ile birebir eşleşmesi (gerçek paketler), tepe koruyan seyreltme ve tam istatistik, boşluk/boş paket, mesafe, vites değişimi, G-G, rota kesilmesi, güç filtresi, olay kuralları, CSV, önbellek; +1 Lab API + notlar) (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
+| `python -m pytest` | **231 passed** (0.6.0: +15 performans denemeleri, +1 deneme/kurma API'si) (0.4.0: +1 replay pencere API'si; 0.5.0: +18 Lab — kanalların normalizer ile birebir eşleşmesi (gerçek paketler), tepe koruyan seyreltme ve tam istatistik, boşluk/boş paket, mesafe, vites değişimi, G-G, rota kesilmesi, güç filtresi, olay kuralları, CSV, önbellek; +1 Lab API + notlar) (decoder/şema 83, hub 15, segment/D-1/D-2/sınırlar 16, fail-first regresyonları 6, config 21, recorder 13, kayıt/build/capture API 8, UDP+API+WS 11, sentetik fixture 11, **gerçek oyun fixture'ları 11** — parametrik testler ayrı sayılır) |
 | `cd frontend; npm test` (vitest) | **47 passed** (0.5.0: +2 ortak grafik yardımcıları; önceki: (21 mantık + 14 akış istemcisi + 10 replay oynatıcısı: sarma doğruluğu, eski pencerenin yeni konumu ezmemesi, 2× sıra ve bitiş, boşluk, sınırlı bellek, boş paket, hata/yeniden deneme, durulan sarma, başlangıç)) |
 | `npx tsc --noEmit`, `npm run build` | temiz; build `dist/build-manifest.json` üretir |
-| `python tools/ui_smoke.py` | **87/87** gerçek tarayıcı kontrolü (0.5.0: Lab açılışı, rozet, tablo max = tam çözünürlük max, sürükleyerek yakınlaştırma, kanal ekleme, seçimin yeniden yüklemede korunması, not ekle/sil, CSV, paneller, Lab → Replay) (0.3.1: boş paketlerde "No driving data" …; 0.4.0: replay rozeti, paneller, `Live:` etiketi, oynatma başına göre grafik, 0. saniyede ve sonda değerin kayıtla eşleşmesi, 2× ilerleme, replay sırasında canlı akışın sürmesi, Close replay) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
+| `python tools/ui_smoke.py` | **93/93** gerçek tarayıcı kontrolü (0.6.0: Live'da kurma/durum/iptal, Runs görünümü) (0.5.0: Lab açılışı, rozet, tablo max = tam çözünürlük max, sürükleyerek yakınlaştırma, kanal ekleme, seçimin yeniden yüklemede korunması, not ekle/sil, CSV, paneller, Lab → Replay) (0.3.1: boş paketlerde "No driving data" …; 0.4.0: replay rozeti, paneller, `Live:` etiketi, oynatma başına göre grafik, 0. saniyede ve sonda değerin kayıtla eşleşmesi, 2× ilerleme, replay sırasında canlı akışın sürmesi, Close replay) (headless Chromium, izole portlar 18100/15620), arka arkaya 2 kez; süreçler PID ile kapatıldı, portlar boş doğrulandı |
 | `tools/repro_close_reset.py` | 10 RST → 0 traceback (0.2.0 ve 0.3.0 backend) |
 
 Smoke testine eklenenler: rAF askıdayken veri gelirken yeniden bağlanma olmaması, sayfa tekrar görünür olunca Receiving, Record/Stop'un sunucu durumunu yansıtması, kayıt süresi/örnek sayısı, Sessions listesi/detay/kaydedilen örnek/dosya bütünlüğü/etiket kaydetme/hız özeti, Sessions'ta 390 px taşma yok, **sayfa kapalıyken kaydın sürmesi** (127 örnek) ve yeniden açılan sayfanın kaydı göstermesi, Diagnostics'ten yakalama ve özeti, yeniden başlayan sunucunun yeni instance kimliği, aynı bundle'da sahte "yeni UI" uyarısı olmaması.
@@ -123,7 +133,7 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 
 ## Sıradaki tek somut iş
 
-**M5 — performans denemeleri:** 0–100, 100–200 km/h ve 100–0 fren ölçümleri için arming → measuring → completed/invalid durum makinesi; eşik geçişinde komşu örnekler arasında interpolasyon; boşluk, reset, sıçrama, araç değişimi ve yanlış başlangıçta geçersiz sayma; sonuçlar kayıtla bağlantılı. Ardından aynı araç/etiket için iki denemenin zaman hizalı karşılaştırması.
+**M6 — araç kimliği ve kurulum:** oyun + ordinal → yerel, sürümlü araç adı kataloğu (kullanıcı düzeltmesi ve kaynağıyla; isim benzerliği kesin eşleme sayılmaz), sonra Windows'ta tek tıkla kurulum/başlatma, veri klasörü ve güncelleme/geri dönüş rehberi.
 
 ## Açık işler
 
@@ -133,6 +143,7 @@ Ham ölçümler (saniyelik CPU/RSS dahil): `docs/measurements/*.json`. Gecikme =
 - RSS eğilimi için uzun soak.
 - Masaüstü tarayıcıda gerçek simge durumu/arka plan testi (headless sınırı).
 - Gerçek %200 tarayıcı yakınlaştırması ve farklı DPI (şimdiye kadar 960×540 viewport eşdeğeri kullanıldı; birebir aynı değil).
+- M5: mesafe/rota bazlı karşılaştırma (aynı yol ve yön doğrulaması) ve kişisel referans turu yok; deneme kuralları tek araçla doğrulandı. 100–200 denemelerinin çoğu normal sürüşten otomatik bulundu, bilinçli test değil.
 - Replay/Lab sayfa adresine yazılmaz (yenileyince Sessions'a dönülür). Lab'da imleçteki rota noktası ve çoklu kayıt karşılaştırması yok (M5).
 - Sezgisel olay eşikleri (tutuş kaybı, smashable) tek oturumla seçildi; farklı araçlarla gözden geçirilmeli. Gerçek kayıtta 8 dakikada 58 tutuş kaybı olayı çıktı (X sınıfı AWD, sert sürüş) — liste filtrelenebilir.
 - Windows paketleme, katalog, analiz (M4–M6).

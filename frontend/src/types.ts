@@ -23,6 +23,7 @@ export interface Status {
   /** per stream segment; compare only together with the segment id */
   sequence: number;
   recorder?: RecorderStatus | null;
+  perf?: PerfStatus | null;
 }
 
 export interface RecorderStatus {
@@ -35,6 +36,42 @@ export interface RecorderStatus {
   queue: number;
   queue_high_watermark: number;
   error: string | null;
+}
+
+export interface RunResult {
+  kind: "accel_0_100" | "accel_100_200" | "brake_100_0";
+  label: string;
+  valid: boolean;
+  t_start: number;
+  t_end: number;
+  time_s: number | null;
+  distance_m: number | null;
+  reason: string | null;
+  reason_kind: "data" | "driving" | null;
+  car_ordinal: number | null;
+  pi: number | null;
+  samples: number;
+  max_dt_s: number;
+  extreme_kmh: number | null;
+}
+
+export interface RunRow extends RunResult {
+  recording_id: string;
+  run_index: number;
+  recording_title: string | null;
+  started_utc: string;
+  car_label: string | null;
+  setup_label: string | null;
+  mode: Mode;
+}
+
+export interface PerfStatus {
+  kind: string | null;
+  label: string | null;
+  state: "idle" | "armed" | "ready" | "measuring" | "completed" | "invalid";
+  elapsed_s: number | null;
+  speed_kmh: number | null;
+  last: RunResult | null;
 }
 
 export interface CarIdentityState {

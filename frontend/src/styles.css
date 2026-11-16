@@ -1603,3 +1603,72 @@ textarea {
   overflow: auto;
   padding-right: var(--s-2);
 }
+
+/* ---------------------------------------------------------------- performance runs */
+.perf-run {
+  margin-top: var(--s-3);
+}
+.perf-state {
+  font-size: 13px;
+}
+.perf-clock {
+  font-size: 18px;
+  font-weight: 600;
+  margin-left: var(--s-2);
+}
+.perf-result {
+  margin: var(--s-2) 0 0;
+}
+.perf-time {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.perf-result.is-invalid {
+  color: var(--danger);
+}
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: var(--s-3);
+}
+.runs {
+  display: grid;
+  gap: var(--s-3);
+}
+.runs-table tr.is-best td {
+  color: var(--accent);
+}
+.runs-table td input {
+  margin: 0;
+}
+.runs-compare table th[scope="row"] {
+  position: static;
+  background: none;
+  font-weight: 500;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--line);
+}
+.runs-delta {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 var(--s-2);
+}
+.runs-overlay {
+  display: block;
+  width: 100%;
+  height: 240px;
+}
+.legend-a {
+  color: var(--data-speed);
+  font-weight: 700;
+}
+.legend-b {
+  color: var(--data-steer);
+  font-weight: 700;
+  margin-left: var(--s-2);
+}
+.runs-warnings {
+  color: var(--text-2);
+  padding-left: 18px;
+}

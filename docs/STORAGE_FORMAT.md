@@ -38,7 +38,8 @@ Yalnız ham datagram saklanır: kayıpsızdır ve ileride düzeltilmiş bir deco
 - `segments` — kayıttaki her stream segmentinin ilk örneği, kaynağı ve başlangıç süresi.
 - `chunks` — dosya adı, ilk/son örnek, örnek sayısı, `t_start_s`/`t_end_s` (kaba zaman indeksi), byte, SHA-256, `status` (`ok` / `recovered` / `missing`).
 - `events` — kayıt sırasında hub olayları (segment, kaynak değişimi, araç kimliği, zaman damgası reseti, resume…) örnek indeksi ve süreyle.
-- `annotations` — M3/M4'teki işaretler/notlar için ayrıldı; henüz API'si yok.
+- `annotations` — Lab'da kullanıcının eklediği notlar (kayıt süresi + metin).
+- `runs` — türetilmiş veri: bir kayıtta bulunan performans denemeleri (JSON), algılayıcı sürümü ve örnek sayısıyla; ikisinden biri değişince yeniden hesaplanır. Silinmesi veri kaybı değildir.
 
 Zaman aralığı sorgusu (`Store.iter_lines(t_from, t_to)`) yalnız aralıkla kesişen chunk'ları açar; iki saatlik bir kaydın küçük bir aralığı tüm dosya açılmadan okunur.
 

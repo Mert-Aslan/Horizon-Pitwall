@@ -125,6 +125,7 @@ class TelemetryHub:
         self.sample_sinks: list[Callable[[dict], None]] = []
         self.event_sinks: list[Callable[[dict], None]] = []
         self.recorder_status: Optional[Callable[[], dict]] = None
+        self.extra_status: dict[str, Callable[[], dict]] = {}  # e.g. live performance run state
         self.capture = None  # optional DiagnosticCapture (tap is called outside the lock)
         self._log_event = _RateLimitedLog()
 
@@ -473,6 +474,11 @@ class TelemetryHub:
     def _with_recorder(self, st: dict) -> dict:
         fn = self.recorder_status
         st["recorder"] = fn() if fn is not None else None
+        for k, f in self.extra_status.items():
+            try:
+                st[k] = f()
+            except Exception:  # noqa: BLE001 - optional extras never break the status
+                st[k] = None
         return st
 
     def _status_locked(self, now: float) -> dict:

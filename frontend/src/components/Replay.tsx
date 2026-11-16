@@ -243,7 +243,7 @@ export function Replay({ id, liveSnap, focus, onClose, startAt = 0 }: { id: stri
         </p>
       </section>
       {state.frame ? (
-        <Live snap={snap} view={view} focus={focus} traceSource={source} traceLive={state.playing} />
+        <Live snap={snap} view={view} focus={focus} traceSource={source} traceLive={state.playing} controls={false} />
       ) : (
         !state.loading && !state.error && <p className="muted pad">No samples at this position.</p>
       )}

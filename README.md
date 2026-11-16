@@ -4,7 +4,7 @@
 
 > Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
 
-Sürüm 0.5.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay** ve **Telemetry Lab** (Sessions); gerçek FH6 oturumuyla doğrulandı. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Sürüm 0.6.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay**, **Telemetry Lab** ve **performans denemeleri** (Sessions); gerçek FH6 oturumuyla doğrulandı. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
 
@@ -71,6 +71,8 @@ python .\tools\send_synthetic.py --port 15607 --seconds 30
 **Replay:** Sessions'ta bir kaydı seçip **Replay**'e basın. Kayıt aynı kokpit panellerinde oynatılır: Play/Pause, 0.5× / 1× / 2×, zaman çizelgesine tıklayarak/sürükleyerek veya klavyeyle (←/→ 5 s, Shift ile 1 s, Home/End, Space) sarma, olaya atlama. Replay canlı akışı durdurmaz; arka planda veri alımı ve süren bir kayıt devam eder. Kayıtta veri olmayan anlar ve oyunun boş paket gönderdiği anlar açıkça belirtilir.
 
 **Analiz (Telemetry Lab):** Sessions'ta **Analyze**. İstediğiniz kanalları (hız, devir, pedallar, direksiyon, güç/tork, ivmeler, teker slip'i, süspansiyon, lastik sıcaklığı, konum) üst üste çizer; grafikte sürükleyerek yakınlaştırırsınız. Seçili aralık için tam çözünürlüklü istatistik, mesafe, tam gaz/fren/tutuş kaybı süreleri, G-G dağılımı, üstten rota ve devir bandına göre güç; otomatik olaylar (veri boşluğu, boş paket, gaz altında tutuş kaybı, olası çarpma — her biri kuralıyla) ve kendi notlarınız. **Export CSV** seçili kanalları ve aralığı dışa aktarır. Sezgisel sonuçlar "heuristic" olarak işaretlidir; ideal değer veya ayar önerisi verilmez.
+
+**Performans denemeleri:** Live'da *Performance run* altında 0–100, 100–200 km/h veya 100–0 fren seçip **Arm**'a basın; ekrandaki talimata göre sürün, süre ve mesafe sunucu tarafından ölçülür. Kayıtlardaki denemeler Sessions → *Runs & comparison*'da listelenir; iki tanesini seçince hizalı hız eğrileri ve farklar görünür. Veri boşluğu, boş paket, geri sarma, sıçrama, geri gitme veya araç değişimi olan denemeler geçersiz sayılır ve nedeni yazılır. Kurallar: [docs/PROTOCOL.md](docs/PROTOCOL.md#performans-denemeleri-m5).
 
 Dosyalar `<data dir>\recordings` altında (SQLite + sıkıştırılmış JSONL; 60 Hz'de saatte ≈ 27 MB). Uygulama çökerse bir sonraki başlangıçta yarım kalan kayıt kurtarılır ve "recovered after a crash" olarak işaretlenir. Kayıtlar otomatik silinmez. Biçim: [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md).
 

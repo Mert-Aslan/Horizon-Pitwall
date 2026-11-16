@@ -2,9 +2,10 @@ import { useRef, type ReactNode } from "react";
 import { DASH, clamp, fmt, fmtLap, fmtPct, gearText, gripLatch, isNum, steerBar } from "../format";
 import { usePref } from "../prefs";
 import type { Snapshot } from "../stream";
-import type { Frame, N, WheelKey } from "../types";
+import type { PerfStatus, Frame, N, WheelKey } from "../types";
 import type { ViewState } from "../viewstate";
 import { DemoButton } from "./DemoButton";
+import { PerfRun } from "./PerfRun";
 import { Traces, type TraceSource } from "./Traces";
 
 const SEGMENTS = 48;
@@ -241,7 +242,7 @@ function Readout({ label, value, unit, sub }: { label: string; value: string; un
   );
 }
 
-function OutputAndTiming({ frame }: { frame: Frame | null }) {
+function OutputAndTiming({ frame, perf }: { frame: Frame | null; perf?: PerfStatus | null }) {
   const n = frame?.normalized;
   const r = n?.race;
   const lapTimes = [r?.current_lap_s, r?.last_lap_s, r?.best_lap_s];
@@ -278,6 +279,7 @@ function OutputAndTiming({ frame }: { frame: Frame | null }) {
       <p className="muted small race-flag">
         Game race flag (IsRaceOn): {n?.race_on === null || n?.race_on === undefined ? "unknown" : n.race_on ? "1" : "0"}
       </p>
+      {perf !== undefined && <PerfRun perf={perf} />}
     </section>
   );
 }
@@ -332,6 +334,7 @@ export function Live({
   focus,
   traceSource,
   traceLive,
+  controls = true,
 }: {
   snap: Snapshot;
   view: ViewState;
@@ -339,6 +342,8 @@ export function Live({
   /** replay passes its own sample source and clock; live uses the WebSocket store */
   traceSource?: TraceSource;
   traceLive?: boolean;
+  /** live-only controls (performance run); off in replay */
+  controls?: boolean;
 }) {
   const frame = snap.frame;
   if (!frame) return <EmptyState snap={snap} view={view} />;
@@ -349,7 +354,7 @@ export function Live({
       <Inputs frame={frame} compactAux={focus} />
       <Chassis frame={frame} compact={focus} />
       {!focus && <Traces live={traceLive ?? !view.dim} source={traceSource} />}
-      {!focus && <OutputAndTiming frame={frame} />}
+      {!focus && <OutputAndTiming frame={frame} perf={controls ? (snap.status?.perf ?? null) : undefined} />}
     </div>
   );
 }

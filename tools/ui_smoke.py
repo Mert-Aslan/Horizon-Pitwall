@@ -197,6 +197,18 @@ def main() -> int:
             feeder.empty = False
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "real data again -> Receiving")
 
+            # M5 live performance run: arm, see the server's state, cancel
+            perf = page.locator(".perf-run")
+            check(perf.count() == 1, "Performance run control shown in Live")
+            perf.locator("select").select_option("accel_0_100")
+            perf.get_by_role("button", name="Arm").click()
+            check(wait_until(lambda: "Armed" in perf.inner_text() or "Ready" in perf.inner_text()), f"arming shows the server state ({perf.inner_text()[:60]!r})")
+            check("Stop the car" in perf.inner_text(), "arming explains how the 0-100 run starts")
+            st = page.evaluate("fetch('/api/v1/perf').then(r => r.json()).then(j => j.state)")
+            check(st in ("armed", "ready"), f"server reports the run as armed ({st})")
+            perf.get_by_role("button", name="Cancel").click()
+            check(wait_until(lambda: perf.get_by_role("button", name="Arm").count() == 1), "Cancel returns to Arm")
+
             # F-01 in a real browser. Headless Chromium does not hide a tab that is moved to
             # the background, so the background condition that matters - requestAnimationFrame
             # not running - is reproduced by holding back rAF callbacks for 6 s while data
@@ -262,6 +274,16 @@ def main() -> int:
                 page.screenshot(path=str(out / "replay-1920.png"))
             page.get_by_role("button", name="Close replay").click()
             check(wait_until(lambda: page.locator(".session-row").count() >= 1 and page.locator(".replay-bar").count() == 0), "Close replay returns to Sessions")
+
+            # M5 runs & comparison view
+            page.get_by_role("button", name="Runs & comparison").click()
+            check(wait_until(lambda: page.locator(".runs-table").count() == 1 or "No " in page.locator(".runs").inner_text(), timeout=15), "Runs view lists runs or explains that there are none")
+            if page.locator(".runs-table tbody tr").count() >= 2:
+                page.locator(".runs-table tbody input[type=checkbox]").nth(0).check()
+                page.locator(".runs-table tbody input[type=checkbox]").nth(1).check()
+                check(wait_until(lambda: page.locator(".runs-overlay").count() == 1 and "Road, surface" in page.locator(".runs-warnings").inner_text()), "two runs compared with their limits stated")
+            page.get_by_role("button", name="Recordings").click()
+            page.wait_for_selector(".session-row")
 
             # M4 Telemetry Lab on the same recording
             page.locator(".session-analyze").click()

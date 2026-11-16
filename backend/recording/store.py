@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS events (
     type TEXT, detail TEXT, stream_segment_id TEXT
 );
 CREATE INDEX IF NOT EXISTS events_by_rec ON events (recording_id, sample_index);
-CREATE TABLE IF NOT EXISTS annotations (   -- reserved for markers/notes (M3/M4)
+CREATE TABLE IF NOT EXISTS runs (          -- derived: performance runs found in a recording
+    recording_id TEXT PRIMARY KEY, detector_version INTEGER, samples INTEGER, runs_json TEXT
+);
+CREATE TABLE IF NOT EXISTS annotations (   -- user markers/notes (Lab)
     id INTEGER PRIMARY KEY AUTOINCREMENT, recording_id TEXT NOT NULL,
     elapsed_s REAL, text TEXT, created_utc TEXT
 );
@@ -194,6 +197,30 @@ class Store:
                 for k, v in changes.items():
                     conn.execute(f"UPDATE recordings SET {k}=? WHERE id=?", (v or None, rec_id))  # k is from EDITABLE
             return True
+        finally:
+            conn.close()
+
+    # ---------------------------------------------------------- derived runs cache
+    def cached_runs(self, rec_id: str, detector_version: int, samples: int) -> Optional[list]:
+        if not self.db_path.exists():
+            return None
+        conn = self.read()
+        try:
+            r = conn.execute("SELECT runs_json FROM runs WHERE recording_id=? AND detector_version=? AND samples=?",
+                             (rec_id, detector_version, samples)).fetchone()
+            return None if r is None else json.loads(r[0])
+        except sqlite3.OperationalError:  # table not created yet by this process
+            return None
+        finally:
+            conn.close()
+
+    def store_runs(self, rec_id: str, detector_version: int, samples: int, runs: list) -> None:
+        """Derived data (recomputable): a short write transaction like user labels."""
+        conn = self.writer()
+        try:
+            with conn:
+                conn.execute("CREATE TABLE IF NOT EXISTS runs (recording_id TEXT PRIMARY KEY, detector_version INTEGER, samples INTEGER, runs_json TEXT)")
+                conn.execute("INSERT OR REPLACE INTO runs VALUES (?,?,?,?)", (rec_id, detector_version, samples, json.dumps(runs)))
         finally:
             conn.close()
 

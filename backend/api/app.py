@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from ..analysis import lab
+from ..analysis import lab, perf
 from ..buildinfo import BuildInfo
 from ..config import APP_NAME, APP_VERSION, Config
 from ..recording.recorder import Recorder, RecorderBusy, RecorderIdle
@@ -106,6 +106,10 @@ class RecordingPatch(BaseModel):
     setup_label: Optional[str] = None
 
 
+class ArmRequest(BaseModel):
+    kind: str
+
+
 class AnnotationRequest(BaseModel):
     elapsed_s: float
     text: str
@@ -168,6 +172,7 @@ def create_app(
     recorder: Optional[Recorder] = None,
     capture: Optional[DiagnosticCapture] = None,
     build: Optional[BuildInfo] = None,
+    live_perf: Optional[perf.LivePerf] = None,
 ) -> FastAPI:
     demo = demo or DemoGenerator(hub)
     build = build or BuildInfo(APP_VERSION, API_VERSION, schema.SCHEMA_VERSION, DIST)
@@ -179,6 +184,9 @@ def create_app(
         hub.recorder_status = lambda: {k: v for k, v in recorder.status().items() if k != "last_result"}
     if capture is not None:
         hub.capture = capture
+    live_perf = live_perf or perf.LivePerf()
+    hub.sample_sinks.append(live_perf.offer)
+    hub.extra_status["perf"] = lambda: {k: v for k, v in live_perf.status().items() if k != "history"}
     clients: dict[int, UiClient] = {}
     next_id = [0]
     signal_box: dict[str, FrameSignal] = {}
@@ -524,6 +532,73 @@ def create_app(
         name = f"pitwall-{rec_id}-{a:.0f}-{b:.0f}s.csv"
         return StreamingResponse(lab.export_rows(col, ids, a, b), media_type="text/csv; charset=utf-8",
                                  headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    # ------------------------------------------------------- performance runs (M5)
+    def runs_for(rec: dict) -> list[dict]:
+        store = need_recorder().store
+        cached = store.cached_runs(rec["id"], perf.DETECTOR_VERSION, rec["samples"])
+        if cached is not None:
+            return cached
+        _, col = lab_columns(rec["id"])
+        runs = [r.as_dict() for r in perf.detect_runs(lab.perf_samples(col))]
+        if rec["status"] != "recording":  # a growing recording is not cached
+            store.store_runs(rec["id"], perf.DETECTOR_VERSION, rec["samples"], runs)
+        return runs
+
+    @app.get("/api/v1/recordings/{rec_id}/runs")
+    def recording_runs(rec_id: str):
+        rec = need_recorder().store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        return {"recording_id": rec_id, "detector_version": perf.DETECTOR_VERSION, "runs": runs_for(rec)}
+
+    @app.get("/api/v1/runs")
+    def all_runs(kind: Optional[str] = None, valid_only: bool = False):
+        """Runs found in every saved recording, with the recording's labels next to them
+        (the game does not send tuning; car/setup labels are the user's)."""
+        store = need_recorder().store
+        out = []
+        for rec in store.list():
+            if rec["samples"] == 0:
+                continue
+            for i, r in enumerate(runs_for(rec)):
+                if (kind and r["kind"] != kind) or (valid_only and not r["valid"]):
+                    continue
+                out.append(r | {"recording_id": rec["id"], "run_index": i, "recording_title": rec["title"], "started_utc": rec["started_utc"],
+                                "car_label": rec["car_label"], "setup_label": rec["setup_label"], "mode": rec["mode"], "recording_status": rec["status"]})
+        return {"detector_version": perf.DETECTOR_VERSION, "kinds": perf.KINDS, "runs": out}
+
+    @app.get("/api/v1/recordings/{rec_id}/runs/{index}/trace")
+    def run_trace(rec_id: str, index: int, pad: float = Query(1.0, ge=0, le=5)):
+        """Full-resolution samples of one run, time relative to its interpolated start."""
+        rec = need_recorder().store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        runs = runs_for(rec)
+        if not 0 <= index < len(runs):
+            raise HTTPException(404, "run not found")
+        r = runs[index]
+        _, col = lab_columns(rec_id)
+        lo, hi = col.index_range(r["t_start"] - pad, r["t_end"] + pad)
+        ch = {c: col.ch[c] for c in ("speed", "throttle", "brake", "g_long")}
+        nan_none = lambda v: None if v != v else round(v, 4)  # noqa: E731
+        return {"run": r, "t": [round(col.el[k] - r["t_start"], 4) for k in range(lo, hi)],
+                **{c: [nan_none(a[k]) for k in range(lo, hi)] for c, a in ch.items()}}
+
+    @app.get("/api/v1/perf")
+    def perf_status():
+        return live_perf.status() | {"kinds": perf.KINDS}
+
+    @app.post("/api/v1/perf/arm")
+    def perf_arm(req: ArmRequest):
+        try:
+            return live_perf.arm(req.kind)
+        except ValueError:
+            raise HTTPException(422, f"kind must be one of {list(perf.KINDS)}") from None
+
+    @app.post("/api/v1/perf/disarm")
+    def perf_disarm():
+        return live_perf.disarm()
 
     @app.post("/api/v1/recordings/{rec_id}/annotations", status_code=201)
     def add_annotation(rec_id: str, req: AnnotationRequest):

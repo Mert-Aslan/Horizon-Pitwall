@@ -74,6 +74,13 @@ export function fitCanvas(c: HTMLCanvasElement): { ctx: CanvasRenderingContext2D
   if (!ctx) return null;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
+  // A context keeps its drawing state between redraws; start every draw from defaults
+  // (a left-over textAlign = "center" once cut the axis labels in half).
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
   return { ctx, w, h };
 }
 

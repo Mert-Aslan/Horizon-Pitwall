@@ -87,6 +87,23 @@ Kullanıcının 8080'de canlı modda çalışan örneğinden, durumuna dokunmada
   - Kayıttaki zaman damgası adımları: 16/15 ms (%79), 31/32 ms (%20), 47/63 ms (7 kez); ortalama alım ~53 Hz, oyunun adımı ~64 Hz.
 - **D-2 — açıklandı (0.3.1):** `CarOrdinal = 0` yalnız boş paketlerde görülüyor. Kayıtta 1418/1418 `IsRaceOn = 0` paketinin ordinal'i 0, 24 285 sürüş paketinin hepsi gerçek araç kimliği taşıyor; 30 dakikalık sayaçlarda da `accepted_car_ordinal_zero` = `accepted_race_off` = 35 255. 0.3.0'daki `car_identity` modeli bu oturumda yalnız **bir** araç değişimi olayı üretti (`2010 → 4210`, kullanıcının gerçek araç değişimi); 0.2.0 benzer bir oturumda 40 sahte olay üretmişti. Boş paketler 10 s'den uzun sürünce bir kez `car_unavailable` yazılır. Eşikler (20 örnek + 0.3 s onay, 10 s) şimdilik değişmedi.
 
+## Performans denemeleri (M5)
+
+Kod: [`backend/analysis/perf.py`](../backend/analysis/perf.py). Aynı durum makinesi kayıtlarda (sonradan) ve canlı akışta (kullanıcı "Arm" ile kurar) çalışır: `armed → ready → measuring → completed | invalid`.
+
+| Tür | Kurulum | Başlangıç | Bitiş | Kurala aykırı (geçersiz) |
+|---|---|---|---|---|
+| 0–100 km/h | araç duruyor (≤ 1 km/h) | 1 km/h yukarı geçiş (roll-out payı yok) | 100 km/h | 100'e varmadan durmak |
+| 100–200 km/h | 98 km/h altı | 100 yukarı geçiş, fren ≤ %10 | 200 km/h | fren > %10, hız tepe değerin 3 km/h altına düşerse |
+| 100–0 fren | 105 km/h üstü | 100 aşağı geçiş, fren ≥ %30 | 1 km/h | gaz > %10, hız 3 km/h'den fazla artarsa |
+
+- Süre kayıt/akış saatinden (monotonic) gelir, kare sayısından değil. İki eşik geçişi de komşu iki örnek arasında doğrusal interpolasyonla bulunur; örnekler en çok 0.25 s aralıklı olmalıdır, aksi halde başlangıç uydurulmaz. Örnek aralığı 16–32 ms olduğundan hata ~0.01 s mertebesindedir; sonuç iki ondalıkla gösterilir.
+- Mesafe iki geçiş arasında hızın yamuk integralidir (oyunun `DistanceTraveled` alanı kullanılmaz).
+- Veri sorunları denemeyi her zaman geçersiz yapar ve raporlanır (`reason_kind = data`): 0.25 s'den uzun boşluk, boş paket, segment (kaynak/mod) değişimi, oyun saatinin geri gitmesi, araç değişimi, hızla açıklanamayan konum sıçraması. Geri gitme (araç-yerel ileri hız < −1 km/h) sürüş kuralıdır.
+- Kayıtlar kullanıcı bir şey kurmadan tarandığı için normal sürüş bu hızlardan sürekli geçer; sürüş kuralıyla biten bir deneme yalnız hedefin en az %80'ine ulaştıysa listelenir.
+- Gerçek oturum (16 Kasım 2026, X sınıfı AWD, PI 999): 0–100 km/h 1.71 s ve 2.62 s; 100–200 km/h 15 geçerli deneme, 1.48–1.94 s. Oyun içi bir referansla karşılaştırılmadı.
+- Karşılaştırma iki denemeyi kendi başlangıçlarına hizalar. Araç kimliği ve PI farkı uyarılır; tuning oyundan gelmez (kullanıcı etiketi); yol, yüzey, hava ve eğim veride yoktur — bu açıkça yazılır. Mesafe/rota bazlı delta (aynı yol, yön, segment uyumu) henüz yapılmadı.
+
 ## Gerçek oyunla doğrulama listesi
 
 1. Data Out açık; IP ve port uygulamayla aynı. Diagnostics → *Lengths seen* yalnız `324` göstermeli.

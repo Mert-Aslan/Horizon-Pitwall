@@ -90,6 +90,7 @@ CHANNELS: tuple[Channel, ...] = (
     Channel("g_long", "Longitudinal acceleration", "g", "Motion", _scale("AccelerationZ", 1 / G0), "car-local Z (forward +); braking is negative"),
     Channel("g_vert", "Vertical acceleration", "g", "Motion", _scale("AccelerationY", 1 / G0), "car-local Y (up +); excludes gravity"),
     Channel("yaw_rate", "Yaw rate", "deg/s", "Motion", _scale("AngularVelocityY", 180 / math.pi)),
+    Channel("vel_long", "Forward velocity", "km/h", "Motion", _scale("VelocityZ", 3.6), "car-local Z; negative = moving backwards"),
     *(Channel(f"slip_{k}", f"Combined slip {k.upper()}", "", "Tyres", _raw(f"TireCombinedSlip{s}"), "|x| > 1 = grip lost (game documentation)") for k, s in WHEELS),
     *(Channel(f"susp_{k}", f"Suspension {k.upper()}", "%", "Suspension", _scale(f"NormalizedSuspensionTravel{s}", 100), "0 = fully extended, 100 = fully compressed") for k, s in WHEELS),
     *(Channel(f"temp_{k}", f"Tyre temperature {k.upper()}", "raw", "Tyres", _raw(f"TireTemp{s}"), "unit not documented by the game (shown unconverted)") for k, s in WHEELS),
@@ -115,6 +116,8 @@ class Columns:
         self.empty = bytearray()
         self.ch: dict[str, array] = {c.id: array("d") for c in CHANNELS}
         self.smash_events: list[dict] = []  # SmashableVelDiff is not a channel; kept as events
+        self.car = array("d")  # CarOrdinal / CarPerformanceIndex (identity, not plotted)
+        self.pi = array("d")
 
     def __len__(self) -> int:
         return len(self.el)
@@ -138,6 +141,8 @@ class Columns:
             col.ts.append(t[_TS])
             empty = is_empty_tuple(t)
             col.empty.append(1 if empty else 0)
+            col.car.append(NAN if empty else float(t[_IX["CarOrdinal"]]))
+            col.pi.append(NAN if empty else float(t[_IX["CarPerformanceIndex"]]))
             if empty:
                 for arr, _ in fns:
                     arr.append(NAN)
@@ -511,3 +516,13 @@ def channel_meta(col: Columns) -> list[dict]:
         out.append({"id": c.id, "label": c.label, "unit": c.unit, "group": c.group, "note": c.note,
                     "valid": valid, "valid_fraction": (valid / n) if n else None})
     return out
+
+
+def perf_samples(col: Columns):
+    """Columns -> perf.Sample stream (offline run detection)."""
+    from .perf import Sample
+
+    sp, vl, thr, brk, gear, xs, zs = (col.ch[c] for c in ("speed", "vel_long", "throttle", "brake", "gear", "pos_x", "pos_z"))
+    for k in range(len(col)):
+        yield Sample(t=col.el[k], speed=sp[k], vel_long=vl[k], throttle=thr[k], brake=brk[k], gear=gear[k], empty=bool(col.empty[k]),
+                     seg=col.seg[k], car=col.car[k], pi=col.pi[k], x=xs[k], z=zs[k], ts=col.ts[k], i=col.i[k])

@@ -211,3 +211,39 @@ def test_lab_endpoints_and_annotations(client):
     assert client.delete(f"/api/v1/recordings/{rid}/annotations/{aid}").status_code == 200
     assert client.delete(f"/api/v1/recordings/{rid}/annotations/{aid}").status_code == 404
     assert client.get("/api/v1/capabilities").json()["features"]["analysis"] is True
+
+
+def test_runs_api_and_live_arming(client):
+    from backend.telemetry.synth import build_packet
+
+    arm = client.post("/api/v1/perf/arm", json={"kind": "accel_0_100"})
+    assert arm.status_code == 200 and arm.json()["state"] == "armed"
+    assert client.post("/api/v1/perf/arm", json={"kind": "nope"}).status_code == 422
+    rid = client.post("/api/v1/recordings/start", json={}).json()["recording_id"]
+    pos = 0.0
+    for k in range(int(4.5 * 60)):
+        v = 0.0 if k < 60 else 50.0 * (k / 60 - 1)  # 50 km/h per second
+        pos += v / 3.6 / 60
+        send(client.rx.port, build_packet({"IsRaceOn": 1, "TimestampMS": 20_000 + k * 16, "EngineMaxRpm": 8000.0, "CarOrdinal": -3,
+                                           "Speed": v / 3.6, "VelocityZ": v / 3.6, "Accel": 255, "Gear": 2, "PositionX": pos}))
+        time.sleep(1 / 60)  # live timing comes from the arrival clock
+    assert wait_for(lambda: client.rec.samples == 270)
+    client.post("/api/v1/recordings/stop")
+    live = client.get("/api/v1/perf").json()
+    assert live["state"] == "completed" and live["last"]["valid"]
+    assert live["last"]["time_s"] == pytest.approx(99 / 50, abs=0.15)  # arrival jitter on this PC
+    runs = client.get(f"/api/v1/recordings/{rid}/runs").json()["runs"]
+    r0 = next(r for r in runs if r["kind"] == "accel_0_100")
+    assert r0["valid"] and r0["time_s"] == pytest.approx(99 / 50, abs=0.15)
+    client.patch(f"/api/v1/recordings/{rid}", json={"car_label": "Test car", "setup_label": "soft"})
+    allr = client.get("/api/v1/runs?kind=accel_0_100&valid_only=true").json()["runs"]
+    assert allr[0]["car_label"] == "Test car" and allr[0]["setup_label"] == "soft"
+    tr = client.get(f"/api/v1/recordings/{rid}/runs/{allr[0]['run_index']}/trace").json()
+    assert tr["t"][0] < 0 < tr["t"][-1] and len(tr["speed"]) == len(tr["t"])
+    assert client.get(f"/api/v1/recordings/{rid}/runs/99/trace").status_code == 404
+    # cached second time (same detector version and sample count)
+    assert client.rec.store.cached_runs(rid, 1, 270) is not None
+    with client.websocket_connect("/api/v1/stream") as ws:
+        ws.receive_text()
+        assert json.loads(ws.receive_text())["status"]["perf"]["state"] == "completed"
+    assert client.post("/api/v1/perf/disarm").json()["state"] == "idle"

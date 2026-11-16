@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.5.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.6.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -31,12 +31,13 @@ Sürüm 0.5.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + k
 | `backend/telemetry/synth.py` | Demo üretici ve fixture paketleyici (sahte veri) |
 | `backend/recording/store.py`, `recorder.py` | Kayıt depolama ve durum makinesi, kurtarma — [STORAGE_FORMAT.md](STORAGE_FORMAT.md) |
 | `backend/analysis/lab.py` | Telemetry Lab: kanal kaydı, sütun önbelleği, seri/özet/G-G/rota/güç/olay/CSV |
+| `backend/analysis/perf.py` | Performans denemeleri: ortak durum makinesi (kayıt + canlı), `LivePerf` |
 | `backend/buildinfo.py` | Build kimliği (içerik özeti, UI manifesti, süreç kimliği) |
 | `backend/api/app.py` | REST + WebSocket, akış kontrolü, güvenlik başlıkları, statik UI |
 | `backend/config.py`, `backend/main.py` | Sıkı ayar doğrulama (varsayılan < JSON < CLI), UTC loglama, başlatma/kapanış |
 | `frontend/src` | React + TypeScript + Vite arayüzü |
 
-Henüz yok: performans denemeleri / karşılaştırma (M5), araç kataloğu (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
+Henüz yok: araç kataloğu ve Windows dağıtımı (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
 
 ## Kimlik ve zaman
 
@@ -114,6 +115,9 @@ Boş paketler (`IsRaceOn = 0`, diğer her şey 0; P-9) kabul edilir ama normaliz
 | `GET …/lab/summary`, `…/lab/gg`, `…/lab/route`, `…/lab/power?bin=` | aralık özeti, G-G noktaları (stride) + tepe/p95, X/Z polyline'ları (kesilmiş, ≤ 8000 nokta), devir bandı başına medyan güç/tork |
 | `GET …/lab/export.csv?channels=&from=&to=` | tam çözünürlük CSV (akış halinde) |
 | `POST /api/v1/recordings/{id}/annotations {elapsed_s, text}`, `DELETE …/annotations/{aid}` | kullanıcı notları |
+| `GET /api/v1/recordings/{id}/runs`, `GET /api/v1/runs?kind=&valid_only=` | kayıttaki / tüm kayıtlardaki performans denemeleri (etiketleriyle; `runs` tablosunda önbellek) |
+| `GET /api/v1/recordings/{id}/runs/{i}/trace?pad=` | bir denemenin tam çözünürlük hız/gaz/fren/ivme dizileri, zaman denemenin başlangıcına göre |
+| `GET /api/v1/perf`, `POST /api/v1/perf/arm {kind}`, `POST /api/v1/perf/disarm` | canlı deneme; durum ayrıca WS `status.perf` |
 | `GET/POST /api/v1/diagnostics/capture`, `POST …/capture/stop` | tanılama yakalaması (5–120 s, boyut sınırlı) |
 | `WS /api/v1/stream` | `hello` → `frame`; istemci `subscribe`, `resync`, `flow`, `ack` gönderebilir |
 
