@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DASH, fmt } from "../format";
+import { readPalette, type Palette } from "../chart";
 import { GAP_S, sampleAt, speedAxisMax, type Ring, type Sample, type SpeedScale } from "../history";
 import { usePref } from "../prefs";
 import { store } from "../stream";
@@ -31,34 +32,6 @@ const PAD_R = 14;
 const AXIS_H = 22;
 const PAD_T = 6;
 const LANE_GAP = 12;
-
-interface Palette {
-  text: string;
-  text2: string;
-  text3: string;
-  line: string;
-  speed: string;
-  throttle: string;
-  brake: string;
-  steer: string;
-  font: string;
-}
-
-function readPalette(): Palette {
-  const cs = getComputedStyle(document.documentElement);
-  const v = (n: string) => cs.getPropertyValue(n).trim();
-  return {
-    text: v("--text"),
-    text2: v("--text-2"),
-    text3: v("--text-3"),
-    line: v("--line"),
-    speed: v("--data-speed"),
-    throttle: v("--data-throttle"),
-    brake: v("--data-brake"),
-    steer: v("--data-steer"),
-    font: v("--font-ui"),
-  };
-}
 
 interface Channel {
   name: string;

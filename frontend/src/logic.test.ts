@@ -161,3 +161,21 @@ describe("grip warning hysteresis", async () => {
     expect(gripLatch(true, null)).toBe(false);
   });
 });
+
+describe("shared chart helpers", async () => {
+  const { niceRange, niceStep, timeTicks, clockLabel } = await import("./chart");
+  it("time ticks land on round steps inside the range", () => {
+    expect(niceStep(480, 8)).toBe(60);
+    expect(niceStep(484, 8)).toBe(120);
+    expect(timeTicks(121, 169, 5)).toEqual([130, 140, 150, 160]);
+    expect(clockLabel(135.5, 10)).toBe("2:16");
+    expect(clockLabel(135.5, 0.5)).toBe("2:15.5");
+  });
+  it("value range keeps zero when it is close, and never collapses", () => {
+    expect(niceRange(10, 300)[0]).toBe(0);
+    expect(niceRange(-5, 5)[0]).toBeLessThan(-5);
+    expect(niceRange(-300, -10)[1]).toBe(0);
+    expect(niceRange(5, 5)).toEqual([4, 6]);
+    expect(niceRange(null, null)).toEqual([0, 1]);
+  });
+});

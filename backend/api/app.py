@@ -15,12 +15,13 @@ from typing import Optional
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from ..analysis import lab
 from ..buildinfo import BuildInfo
 from ..config import APP_NAME, APP_VERSION, Config
 from ..recording.recorder import Recorder, RecorderBusy, RecorderIdle
@@ -103,6 +104,11 @@ class RecordingPatch(BaseModel):
     notes: Optional[str] = None
     car_label: Optional[str] = None
     setup_label: Optional[str] = None
+
+
+class AnnotationRequest(BaseModel):
+    elapsed_s: float
+    text: str
 
 
 class CaptureRequest(BaseModel):
@@ -273,7 +279,7 @@ def create_app(
                 "recording": recorder is not None,
                 "diagnostic_capture": capture is not None,
                 "replay": recorder is not None,
-                "analysis": False,
+                "analysis": recorder is not None,
                 "car_catalog": False,
             },
             "units": {"speed": "km/h (derived from m/s)", "power": "kW / hp (mechanical) derived from W", "torque": "N*m", "boost": "psi above atmospheric"},
@@ -434,6 +440,108 @@ def create_app(
             "truncated": truncated,
             "rows": rows,
         }
+
+    # ------------------------------------------------------- Telemetry Lab (M4)
+    lab_cache = lab.LabCache()
+
+    def lab_columns(rec_id: str) -> tuple[dict, lab.Columns]:
+        store = need_recorder().store
+        rec = store.get(rec_id)
+        if rec is None:
+            raise HTTPException(404, "recording not found")
+        col = lab_cache.get(rec_id, rec["samples"], lambda: lab.Columns.build(store.iter_lines(rec_id)))
+        return rec, col
+
+    def lab_range(col: lab.Columns, t_from: Optional[float], t_to: Optional[float]) -> tuple[float, float]:
+        end = col.el[-1] if len(col) else 0.0
+        a = 0.0 if t_from is None else max(0.0, t_from)
+        b = end if t_to is None else min(max(t_to, a), end if end > a else a)
+        return a, b
+
+    def lab_ids(channels: str, limit: int) -> list[str]:
+        ids = [c for c in channels.split(",") if c]
+        unknown = [c for c in ids if c not in lab.BY_ID]
+        if unknown:
+            raise HTTPException(422, f"unknown channels: {unknown[:5]}")
+        if not ids or len(ids) > limit:
+            raise HTTPException(422, f"choose 1..{limit} channels")
+        return ids
+
+    @app.get("/api/v1/recordings/{rec_id}/lab")
+    def lab_meta(rec_id: str):
+        rec, col = lab_columns(rec_id)
+        store = need_recorder().store
+        recorded = [{"type": e["type"], "t": e["elapsed_s"], "t_end": e["elapsed_s"], "label": f"{e['type'].replace('_', ' ')} {e['detail'] or ''}".strip(),
+                     "rule": "logged by the receiver while recording", "confidence": "certain", "source": "recorded"}
+                    for e in rec["events"] if e["elapsed_s"] is not None]
+        auto = [dict(e, source="auto") for e in lab.detect_events(col)]
+        return {
+            "recording_id": rec_id,
+            "title": rec["title"],
+            "started_utc": rec["started_utc"],
+            "mode": rec["mode"],
+            "status": rec["status"],
+            "duration_s": col.el[-1] if len(col) else 0.0,
+            "samples": len(col),
+            "channels": lab.channel_meta(col),
+            "events": sorted(recorded + auto, key=lambda e: e["t"])[:2000],
+            "annotations": store.annotations(rec_id),
+        }
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/series")
+    def lab_series(rec_id: str, channels: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to"),
+                   points: int = Query(1200, ge=10, le=3000)):
+        _, col = lab_columns(rec_id)
+        a, b = lab_range(col, t_from, t_to)
+        return lab.series(col, lab_ids(channels, 8), a, max(b, a + 1e-3), points)
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/summary")
+    def lab_summary(rec_id: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to")):
+        _, col = lab_columns(rec_id)
+        return lab.summary(col, *lab_range(col, t_from, t_to))
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/gg")
+    def lab_gg(rec_id: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to")):
+        _, col = lab_columns(rec_id)
+        return lab.gg(col, *lab_range(col, t_from, t_to))
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/route")
+    def lab_route(rec_id: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to")):
+        _, col = lab_columns(rec_id)
+        return lab.route(col, *lab_range(col, t_from, t_to))
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/power")
+    def lab_power(rec_id: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to"),
+                  bin_rpm: int = Query(250, alias="bin", ge=50, le=2000)):
+        _, col = lab_columns(rec_id)
+        return lab.power_curve(col, *lab_range(col, t_from, t_to), bin_rpm=bin_rpm)
+
+    @app.get("/api/v1/recordings/{rec_id}/lab/export.csv")
+    def lab_export(rec_id: str, channels: str, t_from: Optional[float] = Query(None, alias="from"), t_to: Optional[float] = Query(None, alias="to")):
+        _, col = lab_columns(rec_id)
+        ids = lab_ids(channels, len(lab.CHANNELS))
+        a, b = lab_range(col, t_from, t_to)
+        name = f"pitwall-{rec_id}-{a:.0f}-{b:.0f}s.csv"
+        return StreamingResponse(lab.export_rows(col, ids, a, b), media_type="text/csv; charset=utf-8",
+                                 headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    @app.post("/api/v1/recordings/{rec_id}/annotations", status_code=201)
+    def add_annotation(rec_id: str, req: AnnotationRequest):
+        text = req.text.strip()[:500]
+        if not text:
+            raise HTTPException(422, "the note is empty")
+        import datetime as _dt
+        aid = need_recorder().store.add_annotation(rec_id, max(0.0, req.elapsed_s), text,
+                                                   _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"))
+        if aid is None:
+            raise HTTPException(404, "recording not found")
+        return {"id": aid, "elapsed_s": max(0.0, req.elapsed_s), "text": text}
+
+    @app.delete("/api/v1/recordings/{rec_id}/annotations/{ann_id}")
+    def delete_annotation(rec_id: str, ann_id: int):
+        if not need_recorder().store.delete_annotation(rec_id, ann_id):
+            raise HTTPException(404, "note not found")
+        return {"deleted": ann_id}
 
     @app.get("/api/v1/recordings/{rec_id}/overview")
     def recording_overview(rec_id: str, points: int = Query(600, ge=10, le=4000)):

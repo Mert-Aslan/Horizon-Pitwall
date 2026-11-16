@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.4.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.5.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -30,12 +30,13 @@ Sürüm 0.4.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + k
 | `backend/telemetry/receiver.py` | UDP soketi; yalnız alır ve hub'a verir |
 | `backend/telemetry/synth.py` | Demo üretici ve fixture paketleyici (sahte veri) |
 | `backend/recording/store.py`, `recorder.py` | Kayıt depolama ve durum makinesi, kurtarma — [STORAGE_FORMAT.md](STORAGE_FORMAT.md) |
+| `backend/analysis/lab.py` | Telemetry Lab: kanal kaydı, sütun önbelleği, seri/özet/G-G/rota/güç/olay/CSV |
 | `backend/buildinfo.py` | Build kimliği (içerik özeti, UI manifesti, süreç kimliği) |
 | `backend/api/app.py` | REST + WebSocket, akış kontrolü, güvenlik başlıkları, statik UI |
 | `backend/config.py`, `backend/main.py` | Sıkı ayar doğrulama (varsayılan < JSON < CLI), UTC loglama, başlatma/kapanış |
 | `frontend/src` | React + TypeScript + Vite arayüzü |
 
-Henüz yok: Telemetry Lab/analiz (M4), araç kataloğu (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
+Henüz yok: performans denemeleri / karşılaştırma (M5), araç kataloğu (M6). Boş klasör veya çalışmayan düğme olarak eklenmedi.
 
 ## Kimlik ve zaman
 
@@ -108,6 +109,11 @@ Boş paketler (`IsRaceOn = 0`, diğer her şey 0; P-9) kabul edilir ama normaliz
 | `GET /api/v1/recordings/{id}/verify` | checksum + satır sayısı + sürekli örnek indeksi kontrolü |
 | `GET /api/v1/recordings/{id}/overview?points=` | tüm kayıt için hız min/max zarfı (boşluklar `null`) |
 | `GET /api/v1/recordings/{id}/frames?from=&to=&max=` | replay penceresi: decode edilmiş frame'ler (`i`, `el`, canlıyla aynı `normalized/derived/quality` + `recording_id`, `sample_index`, `recording_elapsed_s`); en çok 60 s / 8000 satır, `truncated` bayrağı |
+| `GET /api/v1/recordings/{id}/lab` | Lab meta: kanallar (birim, not, veri oranı), olaylar (kayıtlı + sezgisel, kuralıyla), notlar |
+| `GET …/lab/series?channels=&from=&to=&points=` | en çok 8 kanal, ≤ 3000 kova: kova başına min/max/adet + aralıktaki tüm örneklerden istatistik + boşluk listesi |
+| `GET …/lab/summary`, `…/lab/gg`, `…/lab/route`, `…/lab/power?bin=` | aralık özeti, G-G noktaları (stride) + tepe/p95, X/Z polyline'ları (kesilmiş, ≤ 8000 nokta), devir bandı başına medyan güç/tork |
+| `GET …/lab/export.csv?channels=&from=&to=` | tam çözünürlük CSV (akış halinde) |
+| `POST /api/v1/recordings/{id}/annotations {elapsed_s, text}`, `DELETE …/annotations/{aid}` | kullanıcı notları |
 | `GET/POST /api/v1/diagnostics/capture`, `POST …/capture/stop` | tanılama yakalaması (5–120 s, boyut sınırlı) |
 | `WS /api/v1/stream` | `hello` → `frame`; istemci `subscribe`, `resync`, `flow`, `ack` gönderebilir |
 
@@ -133,6 +139,16 @@ Replay tamamen istemcidedir (`frontend/src/replay.ts` → `ReplayPlayer`). Sunuc
 - `Traces` bileşeni bir `TraceSource` alır (`history` + `now()` + `subscribe`): canlıda WebSocket store'u ve tarayıcı alım saati, replay'de oynatıcı ve kayıt saati. Çizim, imleç ve okuma satırı ortaktır; replay'de "Pause/Back to live" yerine replay kontrolleri vardır.
 - Gzip (Starlette `GZipMiddleware`, ≥ 4 KiB) replay pencerelerini ~7× küçültür; WebSocket etkilenmez.
 
+## Telemetry Lab (M4)
+
+Analiz sunucuda, tam çözünürlükte yapılır. Bir kayıt ilk açıldığında chunk'lar bir kez okunup datagram'lar doğrudan `struct` ile açılır ve 30 kanal `array('d')` sütunlarına yazılır (NaN = değer yok; boş paketlerde tüm kanallar NaN). Kanal fonksiyonları `normalize` ile aynı kuralları uygular; `tests/test_lab.py` her kanalı gerçek oyun fixture'larında `normalize` çıktısıyla karşılaştırır. Önbellek (kayıt, örnek sayısı) anahtarlıdır, en çok 3 kayıt.
+
+- Aralık sorguları ikili arama ile `[lo, hi)` indeksini bulur; hiçbir yanıt örnek sayısıyla büyümez (kova/nokta sınırları).
+- Çizim için seyreltme kova başına min–max'tır; sayısal sonuçlar (istatistik, özet, tepe g, güç medyanı) her zaman tüm örneklerden hesaplanır.
+- Ardışıklık kuralı (`Columns.breaks`): 250 ms'den uzun aralık, segment değişimi veya boş paket bir çizgiyi/entegrasyonu keser. Rota ayrıca hızla açıklanamayan sıçramada (> 2·v·dt + 5 m) kesilir.
+- Sezgisel sonuçlar kuralını ve `confidence` alanını taşır; ideal sıcaklık, setup önerisi veya dyno iddiası yoktur.
+- Tarayıcı tarafı (`frontend/src/components/Lab.tsx`) aralık değişince istekleri 120 ms durulunca gönderir, eskisini iptal eder; ortak grafik yardımcıları `frontend/src/chart.ts` (palet, zaman adımları, kanvas boyutlama, değer aralığı) canlı grafikle paylaşılır.
+
 ## Sınırlar
 
 | Yapı | Sınır |
@@ -144,6 +160,7 @@ Replay tamamen istemcidedir (`frontend/src/replay.ts` → `ReplayPlayer`). Sunuc
 | Recorder kuyruğu | `recorder_queue_size` (varsayılan 20 000); dolunca `dropped` |
 | Tanılama yakalaması | 5–120 s, `diagnostic_capture_max_mb` (16 MB); en çok 10 dosya |
 | Replay penceresi (sunucu) / tampon (tarayıcı) | 60 s ve 8000 satır / ~34 s |
+| Lab | seride ≤ 8 kanal, ≤ 3000 kova; G-G ≤ 3000 nokta; rota ≤ 8000 nokta; olay listesi ≤ 2000; sütun önbelleği ≤ 3 kayıt |
 | Log | 1 MB × 3 dönen dosya |
 
 ## Güvenlik (yerel ürün ölçeğinde)

@@ -140,7 +140,7 @@ export function drawOverview(c: HTMLCanvasElement, ov: Overview): void {
   }
 }
 
-function Detail({ id, onChanged, onReplay }: { id: string; onChanged: () => void; onReplay?: (id: string) => void }) {
+function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged: () => void; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
   const [d, setD] = useState<RecordingDetail | null>(null);
   const [form, setForm] = useState({ title: "", car_label: "", setup_label: "", notes: "" });
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -194,6 +194,11 @@ function Detail({ id, onChanged, onReplay }: { id: string; onChanged: () => void
         {onReplay && d.samples > 0 && (
           <button type="button" className="btn session-replay" onClick={() => onReplay(d.id)}>
             Replay
+          </button>
+        )}
+        {onAnalyze && d.samples > 0 && (
+          <button type="button" className="btn session-analyze" onClick={() => onAnalyze(d.id)}>
+            Analyze
           </button>
         )}
       </header>
@@ -294,7 +299,7 @@ function Detail({ id, onChanged, onReplay }: { id: string; onChanged: () => void
   );
 }
 
-export function Sessions({ snap, onReplay }: { snap: Snapshot; onReplay?: (id: string) => void }) {
+export function Sessions({ snap, onReplay, onAnalyze }: { snap: Snapshot; onReplay?: (id: string) => void; onAnalyze?: (id: string) => void }) {
   const rec = snap.status?.recorder;
   const active = rec?.state === "recording" || rec?.state === "stopping";
   const [nonce, setNonce] = useState(0);
@@ -340,7 +345,7 @@ export function Sessions({ snap, onReplay }: { snap: Snapshot; onReplay?: (id: s
           ))}
         </ul>
       </section>
-      <section className="panel">{selected && <Detail key={selected} id={selected} onChanged={() => setNonce((n) => n + 1)} onReplay={onReplay} />}</section>
+      <section className="panel">{selected && <Detail key={selected} id={selected} onChanged={() => setNonce((n) => n + 1)} onReplay={onReplay} onAnalyze={onAnalyze} />}</section>
     </div>
   );
 }

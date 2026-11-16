@@ -4,7 +4,7 @@
 
 > Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
 
-Sürüm 0.4.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı** ve **replay** (Sessions); gerçek FH6 oturumuyla doğrulandı. Analiz (Telemetry Lab) henüz yok. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Sürüm 0.5.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay** ve **Telemetry Lab** (Sessions); gerçek FH6 oturumuyla doğrulandı. Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
 
@@ -69,6 +69,8 @@ python .\tools\send_synthetic.py --port 15607 --seconds 30
 Üst şeritteki **Record** düğmesi kabul edilen her paketi bu PC'ye kaydeder; **Stop** ile biter. Kayıt sunucuda çalışır: sayfa kapansa da sürer, düğme sunucunun gerçek durumunu gösterir. Demo kaydı "demo" olarak etiketlenir; demo ve canlı veri aynı kayda karışmaz. Kayıtlar **Sessions** sekmesindedir: süre, örnek sayısı, düşen örnek, kapsama, tepe/ortalama hız, onaylı araç kimlikleri, tüm kaydın hız özeti, olaylar; başlık, araç, setup/tune ve not etiketleri eklenebilir (oyun tuning ayarlarını göndermez, bunlar sizin yazdıklarınızdır); **Check files** dosyaları checksum ile doğrular.
 
 **Replay:** Sessions'ta bir kaydı seçip **Replay**'e basın. Kayıt aynı kokpit panellerinde oynatılır: Play/Pause, 0.5× / 1× / 2×, zaman çizelgesine tıklayarak/sürükleyerek veya klavyeyle (←/→ 5 s, Shift ile 1 s, Home/End, Space) sarma, olaya atlama. Replay canlı akışı durdurmaz; arka planda veri alımı ve süren bir kayıt devam eder. Kayıtta veri olmayan anlar ve oyunun boş paket gönderdiği anlar açıkça belirtilir.
+
+**Analiz (Telemetry Lab):** Sessions'ta **Analyze**. İstediğiniz kanalları (hız, devir, pedallar, direksiyon, güç/tork, ivmeler, teker slip'i, süspansiyon, lastik sıcaklığı, konum) üst üste çizer; grafikte sürükleyerek yakınlaştırırsınız. Seçili aralık için tam çözünürlüklü istatistik, mesafe, tam gaz/fren/tutuş kaybı süreleri, G-G dağılımı, üstten rota ve devir bandına göre güç; otomatik olaylar (veri boşluğu, boş paket, gaz altında tutuş kaybı, olası çarpma — her biri kuralıyla) ve kendi notlarınız. **Export CSV** seçili kanalları ve aralığı dışa aktarır. Sezgisel sonuçlar "heuristic" olarak işaretlidir; ideal değer veya ayar önerisi verilmez.
 
 Dosyalar `<data dir>\recordings` altında (SQLite + sıkıştırılmış JSONL; 60 Hz'de saatte ≈ 27 MB). Uygulama çökerse bir sonraki başlangıçta yarım kalan kayıt kurtarılır ve "recovered after a crash" olarak işaretlenir. Kayıtlar otomatik silinmez. Biçim: [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md).
 

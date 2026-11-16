@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Banners } from "./components/Banners";
 import { Diagnostics } from "./components/Diagnostics";
+import { Lab } from "./components/Lab";
 import { Live } from "./components/Live";
 import { Replay } from "./components/Replay";
 import { Sessions } from "./components/Sessions";
@@ -41,16 +42,16 @@ export function App() {
 
 
   const focus = focusPref === "on";
-  // Replay is a view on top of the tabs; it never changes the server's live mode.
-  const [replayId, setReplayId] = useState<string | null>(null);
+  // Replay and Lab are views on top of the tabs; neither changes the server's live mode.
+  const [overlay, setOverlay] = useState<{ kind: "replay" | "lab"; id: string; at?: number } | null>(null);
   const openTab = (t: Tab) => {
-    setReplayId(null);
+    setOverlay(null);
     setTab(t);
   };
 
   useEffect(() => {
-    document.title = replayId ? "Replay · Horizon Pitwall" : view.demo ? "Demo · Horizon Pitwall" : `${view.label} · Horizon Pitwall`;
-  }, [replayId, view.demo, view.label]);
+    document.title = overlay ? `${overlay.kind === "lab" ? "Lab" : "Replay"} · Horizon Pitwall` : view.demo ? "Demo · Horizon Pitwall" : `${view.label} · Horizon Pitwall`;
+  }, [overlay, view.demo, view.label]);
   return (
     <div className={`app state-${view.kind}${view.demo ? " is-demo" : ""}`}>
       <a className="skip" href="#main">
@@ -59,22 +60,26 @@ export function App() {
       <TopBar
         snap={snap}
         view={view}
-        tab={replayId ? null : shown}
+        tab={overlay ? null : shown}
         onTab={openTab}
-        replay={!!replayId}
+        overlay={overlay?.kind ?? null}
         focus={focus}
         onFocus={(on) => setFocusPref(on ? "on" : "off")}
         demoOrdinal={caps?.demo_car_ordinal ?? null}
         recordingAvailable={recordingAvailable}
       />
-      <Banners snap={snap} view={view} replay={!!replayId} />
+      <Banners snap={snap} view={view} replay={!!overlay} />
       <main id="main" tabIndex={-1}>
-        {replayId ? (
-          <Replay key={replayId} id={replayId} liveSnap={snap} focus={focus} onClose={() => openTab("sessions")} />
+        {overlay?.kind === "replay" ? (
+          <Replay key={`${overlay.id}@${overlay.at ?? 0}`} id={overlay.id} startAt={overlay.at} liveSnap={snap} focus={focus} onClose={() => openTab("sessions")} />
+        ) : overlay?.kind === "lab" ? (
+          <Lab key={overlay.id} id={overlay.id} onClose={() => openTab("sessions")} onReplayAt={(id, at) => setOverlay({ kind: "replay", id, at })} />
         ) : (
           <>
             {shown === "live" && <Live snap={snap} view={view} focus={focus} />}
-            {shown === "sessions" && <Sessions snap={snap} onReplay={setReplayId} />}
+            {shown === "sessions" && (
+              <Sessions snap={snap} onReplay={(id) => setOverlay({ kind: "replay", id })} onAnalyze={caps?.features.analysis ? (id) => setOverlay({ kind: "lab", id }) : undefined} />
+            )}
             {shown === "diagnostics" && <Diagnostics snap={snap} view={view} caps={caps} />}
           </>
         )}

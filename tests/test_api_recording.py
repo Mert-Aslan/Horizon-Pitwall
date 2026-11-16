@@ -179,3 +179,35 @@ def test_replay_frames_window(client):
     assert len(capped["rows"]) == 10 and capped["truncated"] is True
     # replay reads never change the live hub
     assert client.hub.mode == "live"
+
+
+def test_lab_endpoints_and_annotations(client):
+    rid = client.post("/api/v1/recordings/start", json={}).json()["recording_id"]
+    for i in range(60):
+        send(client.rx.port, packet(TimestampMS=5000 + i * 16, Speed=float(i), Accel=255, Gear=3))
+    assert wait_for(lambda: client.rec.samples == 60)
+    client.post("/api/v1/recordings/stop")
+    meta = client.get(f"/api/v1/recordings/{rid}/lab").json()
+    assert meta["samples"] == 60 and {c["id"] for c in meta["channels"]} >= {"speed", "g_lat", "pos_x"}
+    sp = next(c for c in meta["channels"] if c["id"] == "speed")
+    assert sp["unit"] == "km/h" and sp["valid_fraction"] == 1.0
+    s = client.get(f"/api/v1/recordings/{rid}/lab/series?channels=speed,throttle&points=50").json()
+    assert s["channels"]["speed"]["stats"]["max"] == pytest.approx(59 * 3.6)
+    assert s["samples_in_range"] == 60
+    assert client.get(f"/api/v1/recordings/{rid}/lab/series?channels=speed,nope").status_code == 422
+    nine = ",".join(["speed"] * 9)
+    assert client.get(f"/api/v1/recordings/{rid}/lab/series?channels={nine}").status_code == 422
+    for part in ("summary", "gg", "route", "power"):
+        assert client.get(f"/api/v1/recordings/{rid}/lab/{part}").status_code == 200
+    csv = client.get(f"/api/v1/recordings/{rid}/lab/export.csv?channels=speed")
+    assert csv.status_code == 200 and "attachment" in csv.headers["content-disposition"]
+    assert len(csv.text.strip().splitlines()) == 61
+    r = client.post(f"/api/v1/recordings/{rid}/annotations", json={"elapsed_s": 0.5, "text": "  late apex  "})
+    assert r.status_code == 201 and r.json()["text"] == "late apex"
+    assert client.get(f"/api/v1/recordings/{rid}/lab").json()["annotations"][0]["text"] == "late apex"
+    assert client.post(f"/api/v1/recordings/{rid}/annotations", json={"elapsed_s": 1, "text": " "}).status_code == 422
+    assert client.post(f"/api/v1/recordings/{rid}/annotations", json={"elapsed_s": 1, "text": "x"}, headers={"origin": "http://evil.example"}).status_code == 403
+    aid = r.json()["id"]
+    assert client.delete(f"/api/v1/recordings/{rid}/annotations/{aid}").status_code == 200
+    assert client.delete(f"/api/v1/recordings/{rid}/annotations/{aid}").status_code == 404
+    assert client.get("/api/v1/capabilities").json()["features"]["analysis"] is True

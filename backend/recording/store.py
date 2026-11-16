@@ -197,6 +197,39 @@ class Store:
         finally:
             conn.close()
 
+    # ---------------------------------------------------------- annotations
+    def annotations(self, rec_id: str) -> list[dict[str, Any]]:
+        if not self.db_path.exists():
+            return []
+        conn = self.read()
+        try:
+            return [dict(r) for r in conn.execute(
+                "SELECT id, elapsed_s, text, created_utc FROM annotations WHERE recording_id=? ORDER BY elapsed_s LIMIT 1000", (rec_id,))]
+        finally:
+            conn.close()
+
+    def add_annotation(self, rec_id: str, elapsed_s: float, text: str, created_utc: str) -> Optional[int]:
+        """User marker/note. Short write transaction (see update_metadata)."""
+        conn = self.writer()
+        try:
+            with conn:
+                if conn.execute("SELECT 1 FROM recordings WHERE id=?", (rec_id,)).fetchone() is None:
+                    return None
+                cur = conn.execute("INSERT INTO annotations (recording_id, elapsed_s, text, created_utc) VALUES (?,?,?,?)",
+                                   (rec_id, elapsed_s, text, created_utc))
+                return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+    def delete_annotation(self, rec_id: str, ann_id: int) -> bool:
+        conn = self.writer()
+        try:
+            with conn:
+                cur = conn.execute("DELETE FROM annotations WHERE recording_id=? AND id=?", (rec_id, ann_id))
+                return cur.rowcount > 0
+        finally:
+            conn.close()
+
     def iter_lines(self, rec_id: str, t_from: float = 0.0, t_to: float = float("inf")) -> Iterator[dict[str, Any]]:
         """Lines whose recording elapsed time is within [t_from, t_to]; only chunks whose
         time range overlaps are opened (chunk index = coarse time index)."""

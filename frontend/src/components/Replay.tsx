@@ -113,7 +113,7 @@ function Timeline({ id, state, events, onSeek, onToggle }: {
   );
 }
 
-export function Replay({ id, liveSnap, focus, onClose }: { id: string; liveSnap: Snapshot; focus: boolean; onClose: () => void }) {
+export function Replay({ id, liveSnap, focus, onClose, startAt = 0 }: { id: string; liveSnap: Snapshot; focus: boolean; onClose: () => void; startAt?: number }) {
   const [detail, setDetail] = useState<RecordingDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
@@ -131,9 +131,9 @@ export function Replay({ id, liveSnap, focus, onClose }: { id: string; liveSnap:
   const player = useMemo(() => (detail ? new ReplayPlayer(id, duration, browserReplayEnv(id)) : null), [detail, id, duration]);
   useEffect(() => {
     if (!player) return;
-    player.seek(0);
+    player.seek(startAt);
     return () => player.dispose();
-  }, [player]);
+  }, [player, startAt]);
   const state = useSyncExternalStore(player?.subscribe ?? noop, player?.getSnapshot ?? (() => IDLE));
   const source = useMemo<TraceSource | undefined>(
     () => (player ? { kind: "replay", history: player.history, now: player.now, subscribe: player.subscribe } : undefined),

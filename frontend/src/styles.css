@@ -1425,3 +1425,181 @@ textarea {
     width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------- telemetry lab */
+.mode-lab {
+  background: var(--data-throttle);
+  color: #0f1a13;
+}
+.lab-bar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--data-throttle);
+  border-radius: var(--r-2);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
+}
+.lab-bar a.btn {
+  text-decoration: none;
+  color: inherit;
+}
+.lab-grid {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: start;
+}
+.lab-channels {
+  position: sticky;
+  top: var(--s-3);
+  max-height: calc(100vh - 2 * var(--s-3));
+  overflow: auto;
+}
+.ch-group {
+  border: 0;
+  margin: 0 0 var(--s-3);
+  padding: 0;
+}
+.ch-group legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.ch-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 13px;
+}
+.ch-item .muted {
+  grid-column: 2;
+}
+.lab-main {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.lab-canvas {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+.lab-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.lab-readout {
+  min-height: 2.6em;
+  margin-top: var(--s-2);
+}
+.lab-readout dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  margin: 0;
+}
+.lab-readout dt {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.lab-readout dd {
+  margin: 0;
+}
+.lab-stats {
+  margin-top: var(--s-3);
+}
+.lab-stats caption {
+  text-align: left;
+}
+.lab-stats th[scope="row"] {
+  font-weight: 500;
+  text-align: left;
+  position: static;
+  background: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+}
+.lab-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.lab-panel .kv {
+  font-size: 13px;
+}
+.lab-square {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 360px;
+}
+.power-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 160px;
+  border-bottom: 1px solid var(--line);
+}
+.power-bar {
+  flex: 1;
+  background: var(--data-speed);
+  opacity: 0.6;
+  min-width: 2px;
+}
+.power-bar.is-peak {
+  background: var(--accent);
+  opacity: 1;
+}
+.note-form {
+  display: flex;
+  align-items: end;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.note-form .field {
+  flex: 1;
+  min-width: 240px;
+}
+.note-form .field input {
+  min-width: 0;
+  width: 100%;
+}
+.lab-events li {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+.tag-certain {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.session-analyze {
+  margin-left: var(--s-2);
+}
+@media (max-width: 1100px) {
+  .lab-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lab-channels {
+    position: static;
+    max-height: 40vh;
+  }
+}
+@media (max-width: 800px) {
+  .lab-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.lab-stats th {
+  position: static;
+}
+.lab-events {
+  max-height: 420px;
+  overflow: auto;
+  padding-right: var(--s-2);
+}

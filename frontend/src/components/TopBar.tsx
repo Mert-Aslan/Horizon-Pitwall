@@ -12,7 +12,8 @@ interface Props {
   view: ViewState;
   /** null while a replay is open (no tab is current) */
   tab: Tab | null;
-  replay?: boolean;
+  /** a recording is open in Replay or Lab (the top bar then describes the live link only) */
+  overlay?: "replay" | "lab" | null;
   onTab: (t: Tab) => void;
   focus: boolean;
   onFocus: (on: boolean) => void;
@@ -131,7 +132,8 @@ function RecordControl({ snap }: { snap: Snapshot }) {
   );
 }
 
-export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable, replay = false }: Props) {
+export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, recordingAvailable, overlay = null }: Props) {
+  const replay = overlay !== null;
   const st = snap.status;
   const tabs = TABS.filter((t) => t !== "sessions" || recordingAvailable);
   return (
@@ -153,11 +155,11 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
         ))}
       </nav>
       <div className="topbar-car">
-        {replay ? <span className="car-id muted">Replaying a recording</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} />}
+        {replay ? <span className="car-id muted">{overlay === "lab" ? "Analysing a recording" : "Replaying a recording"}</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} />}
       </div>
       <div className="topbar-status">
         <RecordControl snap={snap} />
-        {(tab === "live" || replay) && (
+        {(tab === "live" || overlay === "replay") && (
           <button type="button" className="btn btn-quiet btn-small focus-toggle" aria-pressed={focus} onClick={() => onFocus(!focus)}>
             Focus view
           </button>
