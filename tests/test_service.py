@@ -151,3 +151,25 @@ def test_uninstall_refuses_to_run_from_installed_copy(monkeypatch, tmp_path):
     with pytest.raises(manage.ServiceError, match="release folder"):
         manage.cmd_uninstall(False)
     assert not called and target.exists()  # nothing was changed
+
+
+def test_secure_program_data_children_inherit_service_access(tmp_path):
+    import subprocess
+
+    root = tmp_path / "pd"
+    (root / "data" / "recordings").mkdir(parents=True)
+    (root / "pitwall.config.json").write_text("{}", encoding="utf-8")
+    (root / "data" / "recordings" / "pitwall.sqlite3").write_bytes(b"x")
+    try:
+        me = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True).stdout.strip().split(",")[-1].strip('"')
+        manage.secure_program_data(root, extra_grants=(f"*{me}:(OI)(CI)F",))  # the test runs unelevated
+        for f in (root / "pitwall.config.json", root / "data" / "recordings" / "pitwall.sqlite3"):
+            out = subprocess.run(["icacls", str(f)], capture_output=True, text=True).stdout
+            sids = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                   f"(Get-Acl -LiteralPath '{f}').Access | ForEach-Object {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value + ' ' + $_.FileSystemRights + ' ' + $_.IsInherited }}"],
+                                  capture_output=True, text=True).stdout
+            assert "S-1-5-19 Modify" in sids and "True" in sids, (out, sids)
+            assert "S-1-5-32-545" not in sids  # no BUILTIN\Users
+    finally:
+        # Give the folder back to normal inheritance so pytest can clean it up.
+        subprocess.run(["icacls", str(root), "/reset", "/T", "/C", "/Q"], capture_output=True)

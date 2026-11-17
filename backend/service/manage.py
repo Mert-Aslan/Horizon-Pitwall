@@ -141,14 +141,22 @@ def copy_release(src: Path, target: Path) -> None:
         safe_rmtree(old, must_be_in=parent, marker=INSTALL_MARKER)
 
 
-def secure_program_data(root: Path) -> None:
+def secure_program_data(root: Path, extra_grants: tuple[str, ...] = ()) -> None:
+    """``extra_grants`` exists for tests that run without elevation."""
     root.mkdir(parents=True, exist_ok=True)
     (root / "data").mkdir(exist_ok=True)
-    r = subprocess.run(
-        ["icacls", str(root), "/inheritance:r", "/grant:r",
-         f"{SID_SYSTEM}:(OI)(CI)F", f"{SID_ADMINS}:(OI)(CI)F", f"{SID_LOCAL_SERVICE}:(OI)(CI)M", "/T", "/Q"],
-        capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    # Explicit ACL on the root only; everything below inherits it. Applying the root's
+    # (OI)(CI) grants to files with /T fails and leaves those files unreadable.
+    has_children = any(root.iterdir())
+    _icacls([str(root), "/inheritance:r", "/grant:r",
+             f"{SID_SYSTEM}:(OI)(CI)F", f"{SID_ADMINS}:(OI)(CI)F", f"{SID_LOCAL_SERVICE}:(OI)(CI)M", *extra_grants, "/Q"], root)
+    if has_children:
+        _icacls([str(root / "*"), "/reset", "/T", "/C", "/Q"], root)
+
+
+def _icacls(args: list[str], root: Path) -> None:
+    r = subprocess.run(["icacls", *args], capture_output=True, text=True,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if r.returncode != 0:
         raise ServiceError(f"could not set permissions on {root}: {r.stdout.strip() or r.stderr.strip()}")
 
