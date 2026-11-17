@@ -164,12 +164,22 @@ def test_secure_program_data_children_inherit_service_access(tmp_path):
         me = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True).stdout.strip().split(",")[-1].strip('"')
         manage.secure_program_data(root, extra_grants=(f"*{me}:(OI)(CI)F",))  # the test runs unelevated
         for f in (root / "pitwall.config.json", root / "data" / "recordings" / "pitwall.sqlite3"):
-            out = subprocess.run(["icacls", str(f)], capture_output=True, text=True).stdout
-            sids = subprocess.run(["powershell", "-NoProfile", "-Command",
-                                   f"(Get-Acl -LiteralPath '{f}').Access | ForEach-Object {{ $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value + ' ' + $_.FileSystemRights + ' ' + $_.IsInherited }}"],
-                                  capture_output=True, text=True).stdout
-            assert "S-1-5-19 Modify" in sids and "True" in sids, (out, sids)
-            assert "S-1-5-32-545" not in sids  # no BUILTIN\Users
+            aces = _aces(f)
+            assert ("S-1-5-19", True) in {(sid, inherited) for sid, inherited, _ in aces}, aces  # LOCAL SERVICE, inherited
+            assert all(sid != "S-1-5-32-545" for sid, _, _ in aces), aces  # no BUILTIN\Users
     finally:
         # Give the folder back to normal inheritance so pytest can clean it up.
         subprocess.run(["icacls", str(root), "/reset", "/T", "/C", "/Q"], capture_output=True)
+
+
+def _aces(path):
+    """(SID, inherited, access mask) for every ACE of a file's DACL."""
+    import win32security
+
+    sd = win32security.GetFileSecurity(str(path), win32security.DACL_SECURITY_INFORMATION)
+    dacl = sd.GetSecurityDescriptorDacl()
+    out = []
+    for i in range(dacl.GetAceCount()):
+        (_type, flags), mask, sid = dacl.GetAce(i)
+        out.append((win32security.ConvertSidToStringSid(sid), bool(flags & 0x10), mask))  # 0x10 = INHERITED_ACE
+    return out
