@@ -1,6 +1,6 @@
 # Uygulama durumu
 
-Son güncelleme: 17 Kasım 2026 · **Sürüm 0.8.0** (backend `APP_VERSION` 0.8.0, frontend `package.json` 0.8.0, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
+Son güncelleme: 17 Kasım 2026 · **Sürüm 0.8.1** (backend `APP_VERSION` 0.8.1, frontend `package.json` 0.8.1, aynı build'de). Çalışan build'in kimliği `GET /api/v1/build` ve Diagnostics → Connection'da görünür.
 
 ## Güncel durum
 
@@ -13,7 +13,8 @@ Son güncelleme: 17 Kasım 2026 · **Sürüm 0.8.0** (backend `APP_VERSION` 0.8.
 | **M4** Telemetry Lab + olaylar + notlar + CSV | ✅ | gerçek kaydın kopyasıyla tarayıcıda doğrulandı |
 | **M5** performans denemeleri + iki denemeyi karşılaştırma | ✅ (ilk sürüm) | gerçek kayıtta 17 geçerli deneme; mesafe/rota bazlı delta yok |
 | **M6** araç adları (Garage) + Windows kurulum/başlatma + güncelleme/geri dönüş | ✅ | internetsiz kurulum ağ kesikken temiz klasörde doğrulandı |
-| **0.8.0** bağımsız Windows paketi (PyInstaller), tray başlatıcı, tekil örnek, isteğe bağlı Windows Service, CI + taslak release | ✅ yerel / ⏳ servis CI'da | exe uçtan uca 20/20 (`tools/test_exe.py`, tray açık); gerçek servis kurulumu yalnız CI runner'ında (`tools/test_service_exe.py`), bu PC'de kurulmadı |
+| **0.8.0** bağımsız Windows paketi (PyInstaller), tray başlatıcı, tekil örnek, isteğe bağlı Windows Service, CI + taslak release | ✅ | exe uçtan uca 20/20 (`tools/test_exe.py`, tray açık); gerçek servis kurulumu CI runner'ında 12/12 (`tools/test_service_exe.py`), bu PC'de kurulmadı |
+| **0.8.1** tek exe (servis aynı exe'de `--service-host`), paket 114 → 70 dosya / ZIP 22 → 16 MB (UCRT kopyaları, yaml/bz2/lzma çıkarıldı), beklenmeyen hatada okunur mesaj + `crash.log`, SmartScreen açıklaması | ✅ | Defender taraması temiz; uyarı imzasız exe için SmartScreen itibarı (bkz. RELEASING.md) |
 
 Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçek tarayıcı testi** (headless Chromium), **pasif oyun gözlemi** (kullanıcının çalışan örneğinden salt okuma), **kontrollü gerçek oyun doğrulaması** (henüz yok).
 

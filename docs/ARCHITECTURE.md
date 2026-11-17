@@ -1,6 +1,6 @@
 # Mimari
 
-Sürüm 0.8.0. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
+Sürüm 0.8.1. Tek süreç, tek komut: Python (UDP alıcı + FastAPI/uvicorn + kayıt yazıcısı) derlenmiş React arayüzünü de servis eder. İnternet, Node, Redis veya ayrı bir veritabanı sunucusu gerekmez; kayıt metadata'sı Python'un yerleşik SQLite'ındadır.
 
 ```
  FH6 ──UDP──▶ UdpReceiver (thread) ──bytes──▶ TelemetryHub.ingest()          (lock altında, disk/SQL yok)
@@ -193,6 +193,6 @@ uvicorn `Ctrl+C` → lifespan kapanışı → recorder durdurulur (5 s içinde k
 
 ## Windows paketi ve yaşam döngüsü (0.8.0)
 
-Üç giriş noktası aynı `backend/runtime.py` yaşam döngüsünü kullanır: kaynak (`backend.main`, ön planda, Ctrl+C), tray başlatıcı (`backend/launcher`, `HorizonPitwall.exe`) ve isteğe bağlı servis (`backend/service`, `HorizonPitwallService.exe`). Hazır olma, sunucunun **kendi** `/api/v1/health` yanıtında aynı `server_instance_id`'yi görmesiyle tanımlanır; portta başka bir sunucu Pitwall sayılmaz.
+Üç giriş noktası aynı `backend/runtime.py` yaşam döngüsünü kullanır: kaynak (`backend.main`, ön planda, Ctrl+C), tray başlatıcı (`backend/launcher`, `HorizonPitwall.exe`) ve isteğe bağlı servis (`backend/service`; aynı exe, SCM tarafından `--service-host` ile başlatılır). Hazır olma, sunucunun **kendi** `/api/v1/health` yanıtında aynı `server_instance_id`'yi görmesiyle tanımlanır; portta başka bir sunucu Pitwall sayılmaz.
 
 Tekil örnek: oturuma yerel adlı mutex `Local\HorizonPitwall-<sha256(veri klasörü)[:16]>` (sahip ölürse işletim sistemi bırakır). Sahip, sağlık kontrolünden sonra `<veri>/run/instance.json` yazar; diğer başlatmalar dosyaya ancak PID canlı ve kimlik eşleşiyorsa güvenir, aksi halde bekler (sınırlı) veya açık hata verir. `--exit` aynı oturumdaki adlı bir event'i (`…-exit`) set eder; ağ üzerinden yaşam döngüsü kontrolü yoktur. Kapanış: recorder açık chunk'ı yazar → UDP kapanır → `instance.json` silinir → mutex bırakılır. Sunucu iş parçacığı beklenmedik biterse 10 dakikada en çok 3 kez yeniden başlatılır.

@@ -6,7 +6,7 @@ Layout (all machine-wide, created only by an explicit ``service install``):
                                            LOCAL SERVICE modify, nobody else
       pitwall.config.json                  service settings (never overwritten)
       data\\                               recordings, catalog, logs of the service
-The service runs HorizonPitwallService.exe as ``NT AUTHORITY\\LocalService``. It never
+The service runs ``HorizonPitwall.exe --service-host`` as ``NT AUTHORITY\\LocalService``. It never
 opens a browser or tray (Session 0); the normal launcher detects it and opens its
 dashboard instead of starting a second receiver.
 
@@ -32,7 +32,8 @@ from .. import paths, runtime
 SERVICE_NAME = "HorizonPitwall"
 DISPLAY_NAME = "Horizon Pitwall"
 DESCRIPTION = "Receives Forza Horizon 6 Data Out telemetry and serves the Horizon Pitwall dashboard on this PC."
-SERVICE_EXE = "HorizonPitwallService.exe"
+APP_EXE = "HorizonPitwall.exe"
+SERVICE_ARG = "--service-host"  # the same executable hosts the service when the SCM starts it
 INSTALL_MARKER = ".horizon-pitwall-install"
 ACCOUNT = r"NT AUTHORITY\LocalService"
 # SIDs keep the ACL independent of the Windows display language.
@@ -123,8 +124,8 @@ def copy_release(src: Path, target: Path) -> None:
     """Copy the release folder to ``target`` atomically-enough: stage next to it, then
     swap. An existing target must be a previous Pitwall installation."""
     parent = target.parent
-    if not (src / SERVICE_EXE).exists():
-        raise ServiceError(f"{src} does not contain {SERVICE_EXE}; run this from the extracted release folder")
+    if not (src / APP_EXE).exists() or not (src / "_internal").is_dir():
+        raise ServiceError(f"{src} does not contain {APP_EXE}; run this from the extracted release folder")
     if target.exists() and not (target / INSTALL_MARKER).exists():
         raise ServiceError(f"{target} exists and is not a Horizon Pitwall installation; remove it manually")
     staging = parent / (target.name + ".new")
@@ -202,7 +203,7 @@ def register(exe: Path) -> None:
 
     hscm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)
     try:
-        bin_path = f'"{exe}"'  # quoted: the path contains spaces
+        bin_path = f'"{exe}" {SERVICE_ARG}'  # quoted: the path contains spaces
         try:
             hs = win32service.OpenService(hscm, SERVICE_NAME, win32service.SERVICE_ALL_ACCESS)
             win32service.ChangeServiceConfig(hs, win32service.SERVICE_WIN32_OWN_PROCESS, win32service.SERVICE_AUTO_START,
@@ -248,7 +249,7 @@ def cmd_install(user_data: Optional[Path]) -> str:
     notes = copy_user_data(user_data, root / "data") if user_data else []
     if notes:
         secure_program_data(root)  # copied files inherit the restricted ACL
-    register(target / SERVICE_EXE)
+    register(target / APP_EXE)
     msg = cmd_start()
     return "\n".join([f"Installed to {target}", f"Service data: {root}", *notes, msg])
 

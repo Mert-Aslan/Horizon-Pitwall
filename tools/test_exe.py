@@ -448,8 +448,7 @@ class Harness:
         h.check("unusable data folder exits 6", denied_data)
 
         def service_exe():
-            r = subprocess.run([str(h.app / "HorizonPitwallService.exe"), "x"], env=h.env(), capture_output=True, timeout=60)
-            assert r.returncode == 2 and b"started by Windows" in r.stdout, r
+            assert h.run("--service-host") == 2  # only the Service Control Manager may use it
             assert h.run("service", "status") == 0
             return None
 

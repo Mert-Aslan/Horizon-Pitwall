@@ -28,13 +28,32 @@ The folder contains:
 | File | Purpose |
 |---|---|
 | `HorizonPitwall.exe` | Starts Pitwall for you (tray icon + browser) |
-| `HorizonPitwallService.exe` | Used only by the optional Windows Service mode; do not start it directly |
 | `_internal\` | Runtime files; keep it next to the executables |
 | `README.txt`, `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt` | Short guide and licenses |
 | `pitwall.config.example.json` | Example settings |
 
-The executable is not code-signed. Windows SmartScreen may show "Windows protected your
-PC" on first start; choose **More info › Run anyway** if the checksum matched.
+### "Windows protected your PC"
+
+On the first start Windows may show **Windows protected your PC** with **Don't run**. This
+is Microsoft Defender SmartScreen. It is not a malware detection (a Defender scan of the
+release finds nothing); SmartScreen warns about every downloaded program that
+
+- carries the "downloaded from the internet" mark, which Windows passes from the ZIP to
+  the extracted files, and
+- is not code-signed by a publisher with an established reputation, or has not yet been
+  downloaded by many people.
+
+Horizon Pitwall is not code-signed yet, so each new version gets this warning until it has
+built a download reputation. To start it:
+
+- **Option 1**: choose **More info › Run anyway** once. Windows remembers the choice for
+  this file.
+- **Option 2**: avoid the prompt. Before extracting, right-click the downloaded ZIP ›
+  **Properties**, tick **Unblock** at the bottom, **OK**, then extract. PowerShell does the
+  same: `Unblock-File .\HorizonPitwall-<version>-windows-x64.zip`.
+
+Only do this for a ZIP downloaded from the project's Releases page whose SHA-256 matches
+`SHA256SUMS.txt`.
 
 ## Start, stop, start with Windows
 

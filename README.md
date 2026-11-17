@@ -8,7 +8,7 @@ performance runs.
 Everything stays on your computer. Pitwall has no account creation requirement or sends nothing to the internet
 and does not modify the game.
 
-Version 0.8.0. Tested with a real Forza Horizon 6 session on Windows 11.
+Version 0.8.1. Tested with a real Forza Horizon 6 session on Windows 11.
 
 ## Download and start
 
@@ -20,9 +20,15 @@ Version 0.8.0. Tested with a real Forza Horizon 6 session on Windows 11.
    <http://127.0.0.1:8080/> once Pitwall is ready, and a Pitwall icon appears in the
    notification area (system tray).
 
-No Python, Node.js or installer is needed. The executable is not code-signed, so Windows
-SmartScreen may ask for confirmation the first time (**More info › Run anyway**). Each
-release lists SHA-256 checksums for the ZIP.
+No Python, Node.js or installer is needed.
+
+**"Windows protected your PC"**: this is Microsoft Defender SmartScreen, not a virus
+detection. SmartScreen warns about every downloaded program that is not code-signed and
+not yet widely downloaded; Horizon Pitwall is not signed yet (see
+[docs/INSTALL.md](docs/INSTALL.md#windows-protected-your-pc)). Either choose
+**More info › Run anyway**, or avoid the prompt: before extracting, right-click the ZIP ›
+**Properties**, tick **Unblock**, **OK**, then extract. Each release lists SHA-256
+checksums for the ZIP.
 
 Starting `HorizonPitwall.exe` again while it is running just opens the dashboard of the
 copy that is already running.
