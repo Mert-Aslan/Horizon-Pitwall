@@ -2,8 +2,6 @@
 
 **Forza Horizon 6 Telemetry & Driving Analysis** — ikinci monitör için yerel, çevrimdışı çalışan canlı telemetri kokpiti.
 
-> Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
-
 Sürüm 0.7.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay**, **Telemetry Lab**, **performans denemeleri** ve **Garage** (araç adları); gerçek FH6 oturumuyla doğrulandı. Kurulum ve güncelleme: [docs/INSTALL.md](docs/INSTALL.md). Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
 ## Kurulum
