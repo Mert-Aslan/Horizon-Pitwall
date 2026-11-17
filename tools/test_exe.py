@@ -354,7 +354,12 @@ class Harness:
             assert code == 0, code
             import psutil
 
-            assert not psutil.pid_exists(pid) or not h.ours(pid)
+            # --exit returns once the server stopped and the single-instance lock is free;
+            # interpreter teardown can take a moment longer.
+            deadline = time.monotonic() + 15
+            while psutil.pid_exists(pid) and h.ours(pid) and time.monotonic() < deadline:
+                time.sleep(0.2)
+            assert not psutil.pid_exists(pid) or not h.ours(pid), "process still running 15 s after --exit"
             assert h.wait_ports_free(), "ports still in use"
             assert h.instance() is None, "instance.json left behind"
             took = time.monotonic() - t0
