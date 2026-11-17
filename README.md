@@ -1,151 +1,142 @@
 # Horizon Pitwall
 
-**Forza Horizon 6 Telemetry & Driving Analysis** — ikinci monitör için yerel, çevrimdışı çalışan canlı telemetri kokpiti.
+A local telemetry dashboard for **Forza Horizon 6** on Windows. It receives the game's
+"Data Out" UDP stream on your PC and shows it in a browser tab: a live cockpit for a second
+monitor, manual session recording, replay, a channel-by-channel analysis view and timed
+performance runs.
 
-Sürüm 0.7.0: veri doğruluğu, Live kokpit, **manuel sürüş kaydı**, **replay**, **Telemetry Lab**, **performans denemeleri** ve **Garage** (araç adları); gerçek FH6 oturumuyla doğrulandı. Kurulum ve güncelleme: [docs/INSTALL.md](docs/INSTALL.md). Ayrıntı: [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+Everything stays on your computer. Pitwall has no account, sends nothing to the internet
+and does not modify the game.
 
-## Kurulum
+Version 0.8.0. Tested with a real Forza Horizon 6 session on Windows 11.
 
-**Kolay yol (Windows):** zip'i bir klasöre açın, `Install Pitwall.cmd`, sonra `Start Pitwall.cmd`. Ayrıntı, güncelleme ve geri dönüş: [docs/INSTALL.md](docs/INSTALL.md).
+## Download and start
 
-**Geliştirici:**
+1. Open the [Releases page](https://github.com/Mert-Aslan/Horizon-Pitwall/releases) and
+   download `HorizonPitwall-<version>-windows-x64.zip`.
+2. Right-click the ZIP, choose **Extract All**, and extract it to a folder you keep
+   (for example `Documents\Horizon Pitwall`).
+3. Double-click **`HorizonPitwall.exe`** in the extracted folder. Your browser opens
+   <http://127.0.0.1:8080/> once Pitwall is ready, and a Pitwall icon appears in the
+   notification area (system tray).
 
-Gereken: Windows, Python 3.11+ (3.13.3 ile test edildi). Son kullanıcı için Node **gerekmez**; derlenmiş arayüz `frontend/dist` içinde gelir.
+No Python, Node.js or installer is needed. The executable is not code-signed, so Windows
+SmartScreen may ask for confirmation the first time (**More info › Run anyway**). Each
+release lists SHA-256 checksums for the ZIP.
 
-```powershell
-python -m pip install -r requirements.txt
-```
+Starting `HorizonPitwall.exe` again while it is running just opens the dashboard of the
+copy that is already running.
 
-## Oyun ayarı
+## Set up the game
 
-Forza Horizon 6 → **Settings › HUD and Gameplay**:
+In Forza Horizon 6 go to **Settings › HUD and Gameplay**:
 
-| Ayar | Değer |
+| Setting | Value |
 |---|---|
 | Data Out | On |
-| Data Out IP Address | `127.0.0.1` (aynı PC) |
-| Data Out IP Port | `5607` (uygulamanın `--udp-port` değeriyle aynı) |
+| Data Out IP Address | `127.0.0.1` (game and Pitwall on the same PC) |
+| Data Out IP Port | `5607` |
 
-5200–5300 portlarını kullanmayın; oyun kendi soketini bu aralıkta açar. Oyun yalnız sürüş sırasında veri gönderir; menü, pause, rewind, replay ve yarış sonrası akış durur (uygulama bunu "Data stale" olarak gösterir, bağlantı hatası saymaz).
+The game only sends data while you drive. In menus, pause, rewind and replays the stream
+stops and Pitwall shows **Data stale**, which is expected.
 
-## Başlatma
+To receive from a console or another PC on your network, see
+[Settings](docs/INSTALL.md#settings) (`udp_host`).
 
-```powershell
-python .\forza_horizon_6_telemetry.py
+## The tray icon
+
+Right-click the Pitwall icon in the notification area:
+
+- **Open Dashboard** (also a left-click on the icon)
+- **Open Data Folder** and **Open Logs**
+- **Start with Windows**: off by default; when on, Pitwall starts in the tray at sign-in
+  without opening a browser
+- **Exit**: stops Pitwall cleanly. A recording that is in progress is finished and saved.
+
+Closing the browser tab does not stop Pitwall; use **Exit**. From a terminal,
+`HorizonPitwall.exe --exit` does the same.
+
+## What it does
+
+- **Live**: rev band, gear and speed, throttle, brake and steering, four-wheel tyre
+  temperature, slip and suspension, a 20-second trace, power, torque and boost. A focus
+  view keeps only the main readouts.
+- **Recording**: the **Record** button saves every received packet until you press
+  **Stop**. Recording runs in the background app, so it continues if the browser tab is
+  closed. If Pitwall or the PC stops unexpectedly, the unfinished recording is recovered
+  on the next start and marked as recovered.
+- **Sessions and replay**: a list of recordings with duration, speed summary and notes;
+  replay in the same cockpit view at 0.5×, 1× or 2×, with seeking.
+- **Telemetry Lab**: plot any channels over a recording, zoom into a range, see statistics,
+  a G-G plot, the route from above, and export the selected range as CSV. Automatically
+  detected events are labelled as heuristics.
+- **Performance runs**: 0–100 km/h, 100–200 km/h and 100–0 km/h braking, measured from the
+  telemetry. Runs with data gaps, rewinds or a car change are rejected with the reason.
+  Two runs can be compared.
+- **Garage**: the game identifies cars only by a number. Pitwall ships no car-name list;
+  you name a car once and the name is used everywhere. Name lists can be exported and
+  imported.
+- **Diagnostics**: connection state, packet counters, build identity and a short local
+  packet capture for troubleshooting.
+- **Demo mode**: synthetic data, clearly labelled, only when you choose it. Pitwall never
+  shows invented data on its own.
+
+## Where your data is
+
+Recordings, car names, settings and logs are kept in your user profile, not in the program
+folder:
+
+```
+%LOCALAPPDATA%\HorizonPitwall
 ```
 
-Arayüz: <http://127.0.0.1:8080/>. Kapatmak için terminalde `Ctrl+C` (UDP soketi ve web sunucusu temiz kapanır).
+Replacing or deleting the program folder does not touch this data. Recordings are never
+deleted automatically (about 27 MB per hour of driving). Back up by exiting Pitwall and
+copying the folder.
 
-Sık kullanılan seçenekler (`--help` tümünü listeler):
+## Updating and removing
 
-| Seçenek | Açıklama |
+- **Update**: exit Pitwall, extract the new ZIP to a new folder and start the new
+  `HorizonPitwall.exe`. Your data is kept. If **Start with Windows** was on, it now points
+  to the new folder. Keep the old folder until you are happy with the new version.
+- **Remove**: exit Pitwall, turn off **Start with Windows** if you enabled it, then delete
+  the program folder. Delete `%LOCALAPPDATA%\HorizonPitwall` only if you also want to
+  delete your recordings.
+
+## Optional: Windows Service mode
+
+For a PC that should receive telemetry without anyone signed in, Pitwall can also run as a
+Windows Service. This is optional, needs administrator rights and is only set up when you
+run `HorizonPitwall.exe service install`. Most users do not need it. See
+[docs/SERVICE.md](docs/SERVICE.md).
+
+## Troubleshooting
+
+| Symptom | What to check |
 |---|---|
-| `--udp-port 5607` / `--web-port 8080` | Portlar |
-| `--demo` | Açıkça etiketli sentetik veriyle başla |
-| `--open` | Varsayılan tarayıcıda aç |
-| `--lan` | Arayüzü yerel ağda yayınla (opt-in; aşağıya bakın) |
-| `--data-dir KLASÖR` | Log, kayıt ve tanılama yakalamalarının klasörü (varsayılan `%LOCALAPPDATA%\HorizonPitwall`) |
-| `--paths` | Veri, log, kayıt ve araç adı dosyalarının yerini yazar ve çıkar |
-| `--config dosya.json` | Ayar dosyası (`pitwall.config.example.json` örnek; `./pitwall.config.json` varsa otomatik okunur) |
+| **Waiting for data** | Data Out is off, the IP or port does not match, or you are not driving yet. Diagnostics shows whether any packets arrive. |
+| "The telemetry port 5607 (UDP) is already in use" at start | Another program receives on that port (another telemetry tool, or a second Pitwall). Close it, or change `udp_port` and the game's port. |
+| "The dashboard port 8080 is already in use" at start | Another program uses port 8080. Close it or set `web_port`. |
+| Pitwall icon is grey | The background server stopped. Pitwall restarts it automatically a few times; otherwise use **Restart Pitwall** in the menu and check **Open Logs**. |
+| **Unexpected packet format** | The sender is not Forza Horizon 6, or another program writes to the same port. |
 
-Ayar dosyası ve komut satırı aynı sıkı doğrulamadan geçer: `"lan": "false"` gibi tırnaklı değerler, `true` port, `NaN` veya bilinmeyen anahtarlar reddedilir; hata mesajı hangi alanın neden geçersiz olduğunu (JSON'da satır/sütun) söyler ve uygulama kod 2 ile çıkar.
+More: [docs/INSTALL.md](docs/INSTALL.md). Logs: `%LOCALAPPDATA%\HorizonPitwall\logs\pitwall.log`.
 
-`udp_host` uygulamanın **dinlediği** adrestir (`127.0.0.1` = yalnız bu PC, `0.0.0.0` = ağdaki bir konsol/PC de gönderebilir). Oyunda yazılan Data Out IP ise **hedeftir**: Pitwall'ın çalıştığı PC'nin adresi (aynı PC'de `127.0.0.1`); `0.0.0.0` hedef olarak yazılmaz. `--lan` yalnız web arayüzünü ağa açar, UDP alımını değiştirmez.
+## Documentation
 
-`python -m backend` aynı uygulamayı başlatır.
+- [docs/INSTALL.md](docs/INSTALL.md): installing, settings, updating, data and troubleshooting
+- [docs/SERVICE.md](docs/SERVICE.md): optional Windows Service mode
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): running from source, tests, building the package
+- [docs/RELEASING.md](docs/RELEASING.md): how releases are built and published
+- Technical notes (in Turkish): [protocol](docs/PROTOCOL.md), [architecture](docs/ARCHITECTURE.md),
+  [storage format](docs/STORAGE_FORMAT.md), [design system](docs/DESIGN_SYSTEM.md),
+  [implementation status](docs/IMPLEMENTATION_STATUS.md)
 
-## Demo
+## License
 
-Canlı sinyal yokken uygulama **asla** kendiliğinden sahte veri göstermez. Demo yalnız kullanıcı seçimiyle açılır: boş ekrandaki *Explore with demo data* düğmesi, Diagnostics'teki *Start demo* veya `--demo`. Demo açıkken üstte kalıcı "Demo" rozeti ve banner görünür, araç "Demo car · synthetic" olarak etiketlenir ve gerçek UDP paketleri yok sayılır (sayaçta görünür).
+[MIT](LICENSE). The Windows package bundles third-party components; their licenses are in
+`THIRD_PARTY_NOTICES.txt` inside the ZIP.
 
-Oyunsuz test için ayrı bir porta sentetik paket göndermek:
-
-```powershell
-python .\forza_horizon_6_telemetry.py --udp-port 15607 --web-port 18080
-python .\tools\send_synthetic.py --port 15607 --seconds 30
-```
-
-`send_synthetic.py` oyunun varsayılan portu 5607'ye `--allow-default-port` olmadan göndermez.
-
-## Kayıt
-
-Üst şeritteki **Record** düğmesi kabul edilen her paketi bu PC'ye kaydeder; **Stop** ile biter. Kayıt sunucuda çalışır: sayfa kapansa da sürer, düğme sunucunun gerçek durumunu gösterir. Demo kaydı "demo" olarak etiketlenir; demo ve canlı veri aynı kayda karışmaz. Kayıtlar **Sessions** sekmesindedir: süre, örnek sayısı, düşen örnek, kapsama, tepe/ortalama hız, onaylı araç kimlikleri, tüm kaydın hız özeti, olaylar; başlık, araç, setup/tune ve not eklenebilir; **Check files** dosyaları checksum ile doğrular.
-
-**Replay:** Sessions'ta bir kaydı seçip **Replay**'e basın. Kayıt aynı kokpit panellerinde oynatılır: Play/Pause, 0.5× / 1× / 2×, zaman çizelgesine tıklayarak/sürükleyerek veya klavyeyle (←/→ 5 s, Shift ile 1 s, Home/End, Space) sarma, olaya atlama. Replay canlı akışı durdurmaz; arka planda veri alımı ve süren bir kayıt devam eder. Kayıtta veri olmayan anlar ve oyunun boş paket gönderdiği anlar açıkça belirtilir.
-
-**Analiz (Telemetry Lab):** Sessions'ta **Analyze**. İstediğiniz kanalları (hız, devir, pedallar, direksiyon, güç/tork, ivmeler, teker slip'i, süspansiyon, lastik sıcaklığı, konum) üst üste çizer; grafikte sürükleyerek yakınlaştırırsınız. Seçili aralık için tam çözünürlüklü istatistik, mesafe, tam gaz/fren/tutuş kaybı süreleri, G-G dağılımı, üstten rota ve devir bandına göre güç; otomatik olaylar (veri boşluğu, boş paket, gaz altında tutuş kaybı, olası çarpma — her biri kuralıyla) ve kendi notlarınız. **Export CSV** seçili kanalları ve aralığı dışa aktarır. Sezgisel sonuçlar "heuristic" olarak işaretlidir; ideal değer veya ayar önerisi verilmez.
-
-**Performans denemeleri:** Live'da *Performance run* altında 0–100, 100–200 km/h veya 100–0 fren seçip **Arm**'a basın; ekrandaki talimata göre sürün, süre ve mesafe sunucu tarafından ölçülür. Kayıtlardaki denemeler Sessions → *Runs & comparison*'da listelenir; iki tanesini seçince hizalı hız eğrileri ve farklar görünür. Veri boşluğu, boş paket, geri sarma, sıçrama, geri gitme veya araç değişimi olan denemeler geçersiz sayılır ve nedeni yazılır. Kurallar: [docs/PROTOCOL.md](docs/PROTOCOL.md#performans-denemeleri-m5).
-
-**Garage:** oyun her araç için yalnız bir sayı gönderir; Pitwall hazır bir ad listesiyle gelmez ve tahmin etmez. Garage'da bir araca bir kez ad verin; üst şeritte, Sessions'ta ve karşılaştırmalarda kullanılır. Ad listelerini dışa aktarıp paylaşabilir, başkasının listesini içe aktarabilirsiniz; içe aktarma sizin yazdığınız adları asla değiştirmez ve her ad kaynağını gösterir.
-
-Dosyalar `<data dir>\recordings` altında (SQLite + sıkıştırılmış JSONL; 60 Hz'de saatte ≈ 27 MB). Uygulama çökerse bir sonraki başlangıçta yarım kalan kayıt kurtarılır ve "recovered after a crash" olarak işaretlenir. Kayıtlar otomatik silinmez. Biçim: [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md).
-
-## Ekranlar
-
-- **Live** — devir bandı, vites + hız, gaz/fren ve merkezi sıfırlı direksiyon (debriyaj/el freni kompakt ya da genişletilmiş), dört teker (ham lastik sıcaklığı, combined slip, süspansiyon), son 20 s grafik (zaman ekseni, imleç, duraklatma, klavyeyle inceleme), güç, tork, boost ve zamanlama. Üst şeritteki **Focus view** yalnız ana ölçümleri ve girişleri bırakır; tercih tarayıcıda saklanır.
-- **Sessions** — kayıtlar (yukarıda).
-- **Diagnostics** — bağlantı durumu ve build kimliği, paket sayaçları (aynı zaman damgalı paketlerin sınıfları dahil), uzunluk dağılımı, 324. byte değerleri, olaylar, reddedilen paket örnekleri, akış/kayıt sayaçları, protokol doğrulama durumu, **tanılama yakalaması** (30/60 s, her datagram yerel dosyaya; gönderici adresleri isteğe bağlı gizlenir; hiçbir şey yüklenmez) ve ham alan inspector'ı (~4 Hz).
-
-Durumlar: `starting`, `waiting`, `receiving`, `stale`, `error`, sunucuya ulaşılamıyor, geçersiz paket, ikinci gönderici, demo. Ekran görüntüleri: [docs/screenshots](docs/screenshots).
-
-## LAN (telefon/tablet)
-
-`--lan` ile web arayüzü `0.0.0.0` üzerinde dinler; kabul edilen `Host` başlıkları localhost + bu PC'nin adı/IP'leridir (`extra_allowed_hosts` ile genişletilebilir). LAN istemcileri **yalnız izler**; demo aç/kapa gibi durum değiştiren istekler yalnız bu PC'den kabul edilir (`lan_allow_control: true` ile açılabilir). Uygulama firewall ayarını değiştirmez ve internete port açmaz; Windows ilk seferde izin sorabilir.
-
-## Test
-
-```powershell
-python -m pip install -r requirements-dev.txt
-python -m pytest
-cd frontend; npm ci; npm test
-```
-
-Tarayıcı smoke testi (Python Playwright; bir kez `python -m playwright install chromium` gerekir). Kendi izole sunucusunu 18100/15620 portlarında ve `%TEMP%\pitwall-isolated-18100` veri klasörüyle başlatır, yeniden bağlanma için bir kez yeniden başlatır, yalnız kendi başlattığı süreç ağacını kapatır ve portların boşaldığını yazar:
-
-```powershell
-python tools/ui_smoke.py
-```
-
-Aynı veriyle önce/sonra ekran görüntüsü ve tarayıcı performans ölçümü: `tools/ui_capture.py` (kullanım dosyanın başında; `tools/isolated_server.py` içinde çalıştırılır).
-
-Sentetik fixture'ları yeniden üretmek: `python tools/make_fixtures.py`. Yük/gecikme ölçümü: `tools/loadtest.py` (izole bir örneğe karşı; yavaş/yeniden bağlanan istemci, kayıt, ısınma süresi, `--json` ile saniyelik CPU/RSS; 5607/8080'i reddeder). Windows bağlantı sıfırlama denemesi: `python tools/repro_close_reset.py` (kendi izole sunucusunu açar ve kapatır).
-
-## Arayüzü geliştirmek
-
-```powershell
-python .\forza_horizon_6_telemetry.py          # backend :8080
-cd frontend; npm ci; npm run dev               # http://localhost:5173, API proxy -> :8080
-npm run build                                  # frontend/dist (backend bunu servis eder)
-```
-
-`frontend/dist` eksikse ana sayfa derleme komutunu gösteren bir mesaj döner; API yine çalışır.
-
-## Sorun giderme
-
-| Belirti | Olası neden / çözüm |
-|---|---|
-| "Waiting for data" | Data Out kapalı, IP/port uyuşmuyor ya da henüz sürüşte değilsiniz. Diagnostics'te *Received* sayacı artıyor mu bakın. |
-| "Receiver error … Only one usage of each socket address" | Port başka programda (ikinci Pitwall, SimHub vb.). Onu kapatın veya `--udp-port` + oyundaki portu değiştirin. |
-| "Unexpected packet format" | Gönderen FH6 değil (ör. Forza Motorsport "sled/dash"), ya da başka bir uygulama aynı porta yazıyor. Diagnostics → *Lengths seen*. |
-| "Packets from a second sender are being ignored" | Aynı porta iki kaynak gönderiyor; ilk kaynak susana kadar (3 s) ikincisi yok sayılır. |
-| "Data stale" | Oyun menüde/pause/rewind/replay'de. Son değerler soluk ve yaşıyla gösterilir. |
-| "No driving data" | Oyun paket gönderiyor ama içleri boş (IsRaceOn = 0, tüm değerler 0) — sürüş dışındaki bazı anlarda olur. Son gerçek değerler soluk gösterilir; sürüşe dönünce kendiliğinden düzelir. |
-| "Recording stopped: …" | Kayıt diske yazılamadı (ör. disk dolu). Canlı görünüm çalışmaya devam eder; o ana kadar kaydedilen kısım Sessions'ta. |
-| "Pitwall has been updated" | Arayüz yeniden derlendi; sayfayı yenileyin. |
-| Web portu dolu | Başlangıçta açık hata verir; `--web-port 8081`. |
-
-Loglar: `%LOCALAPPDATA%\HorizonPitwall\logs\pitwall.log` (1 MB × 3 dönen dosya; zaman UTC, olaylar `event=…` biçiminde, başlangıç satırında build ve instance kimliği).
-
-## Belgeler
-
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) — paket şeması, kararlar, açık sorular, fixture kökeni
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — katmanlar, kimlik ve zaman modeli, frame sözleşmesi, API, akış kontrolü, sınırlar
-- [docs/STORAGE_FORMAT.md](docs/STORAGE_FORMAT.md) — kayıt dosyaları, tablolar, tutarlılık ve kurtarma
-- [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) — token'lar, bileşenler, durumlar, kontrast ölçümleri
-- [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) — dış kaynak stratejisi (henüz entegrasyon yok)
-- [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) — durum, testler, ölçümler, sıradaki iş
-
-## Lisans
-
-[MIT](LICENSE). Bağımsız bir hobi projesidir; Forza, Playground Games, Turn 10 veya Microsoft ile resmi bir bağı yoktur.
+Horizon Pitwall is an independent hobby project. It is not affiliated with or endorsed by
+Microsoft, Xbox Game Studios, Playground Games or Turn 10 Studios. Forza Horizon is a
+trademark of Microsoft.

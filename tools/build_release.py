@@ -1,4 +1,7 @@
-"""Build a self-contained release folder + zip of Horizon Pitwall.
+"""Legacy source package (needs Python on the user's PC). The recommended download is the
+standalone Windows package from tools/build_exe.py.
+
+Build a self-contained source release folder + zip of Horizon Pitwall.
 
     python tools/build_release.py [--out release] [--wheels]
 

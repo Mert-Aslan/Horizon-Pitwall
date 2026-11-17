@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "Horizon Pitwall"
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.8.0"
 GAME_RESERVED_PORTS = range(5200, 5301)  # the game binds its own socket in this range
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 EQUAL_TIMESTAMP_POLICIES = ("reject", "accept_changed")
@@ -179,7 +179,24 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def load(argv: Optional[list[str]] = None) -> Config:
+def load_file(path: Optional[Path], **overrides: Any) -> Config:
+    """Config from an optional JSON file plus explicit overrides (service/launcher use;
+    never looks at the current working directory)."""
+    cfg = Config()
+    source = "defaults"
+    if path is not None and path.exists():
+        for k, v in _read_json(path).items():
+            setattr(cfg, k, v)
+        source = str(path)
+    for k, v in overrides.items():
+        setattr(cfg, k, v)
+    if isinstance(cfg.log_level, str):
+        cfg.log_level = cfg.log_level.upper()
+    cfg.validate(source)
+    return cfg
+
+
+def load(argv: Optional[list[str]] = None, default_config: Optional[Path] = Path("pitwall.config.json")) -> Config:
     ap = argparse.ArgumentParser(prog="pitwall", description=f"{APP_NAME} - Forza Horizon 6 telemetry & driving analysis")
     ap.add_argument("--config", help="JSON config file (default: ./pitwall.config.json if present)")
     ap.add_argument("--udp-host", help="address this app binds for UDP (127.0.0.1 = this PC only; 0.0.0.0 = also LAN senders)")
@@ -195,9 +212,9 @@ def load(argv: Optional[list[str]] = None) -> Config:
     args = ap.parse_args(argv)
 
     cfg = Config()
-    path = Path(args.config) if args.config else Path("pitwall.config.json")
+    path = Path(args.config) if args.config else default_config
     source = "command line"
-    if path.exists():
+    if path is not None and path.exists():
         for k, v in _read_json(path).items():
             setattr(cfg, k, v)
         source = f"{path} / command line"

@@ -7,7 +7,6 @@ import contextlib
 import ipaddress
 import json
 import logging
-import os
 import socket
 import time
 from pathlib import Path
@@ -22,6 +21,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ..analysis import lab, perf
+from .. import paths
 from ..buildinfo import BuildInfo
 from ..catalog import CarCatalog, CatalogError, dumps_export, seen_cars
 from ..config import APP_NAME, APP_VERSION, Config
@@ -42,9 +42,8 @@ REPLAY_MAX_WINDOW_S = 60.0
 REPLAY_MAX_ROWS = 8000
 FLOW_ACK_EVERY = 2
 
-ROOT = Path(__file__).resolve().parents[2]
-# PITWALL_UI_DIST lets tests serve another UI build (e.g. a before/after comparison).
-DIST = Path(os.environ["PITWALL_UI_DIST"]) if os.environ.get("PITWALL_UI_DIST") else ROOT / "frontend" / "dist"
+# UI bundle: repository or frozen bundle; PITWALL_UI_DIST overrides it for tests.
+DIST = paths.ui_dist()
 
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "

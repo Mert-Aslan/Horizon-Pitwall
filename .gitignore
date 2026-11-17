@@ -10,3 +10,8 @@ data/
 *.partial
 release/
 .venv/
+.venv-build/
+build/
+dist-release/
+backend/_build_info.json
+packaging/version_info.txt

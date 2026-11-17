@@ -1,0 +1,4 @@
+# Building HorizonPitwall.exe (tools/build_exe.py). Pinned; tested 2026-11-17.
+-r requirements-app.txt
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.10

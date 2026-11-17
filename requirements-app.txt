@@ -1,0 +1,6 @@
+# Windows application (tray launcher, Windows service). Pinned; tested 2026-11-17.
+-r requirements.txt
+pystray==0.19.5
+pillow==13.0.0
+pywin32==312
+psutil==7.0.0
