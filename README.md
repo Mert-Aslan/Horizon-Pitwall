@@ -5,7 +5,7 @@ A local telemetry dashboard for **Forza Horizon 6** on Windows. It receives the 
 monitor, manual session recording, replay, a channel-by-channel analysis view and timed
 performance runs.
 
-Everything stays on your computer. Pitwall has no account, sends nothing to the internet
+Everything stays on your computer. Pitwall has no account creation requirement or sends nothing to the internet
 and does not modify the game.
 
 Version 0.8.0. Tested with a real Forza Horizon 6 session on Windows 11.
