@@ -1,13 +1,7 @@
-"""Single source of truth for the FH6 "Data Out" packet layout.
+"""Forza Horizon 6 Data Out packet layout.
 
-Source: Forza Support, "Forza Horizon 6 Data Out Documentation" (checked 2026-11-16).
-The document lists the fields in order with their types and states a total packet size
-of 324 bytes. Offsets are NOT given by the document; they are derived here by packing the
-documented types back-to-back with no alignment padding. That derivation ends at byte
-323, so the 324th byte is undocumented. It is treated as an opaque tail (see
-docs/PROTOCOL.md, decision P-1). Byte order is not stated by the document; little-endian
-is assumed (Windows/x64 game, matches every previous Forza title) and recorded as
-assumption P-2.
+The 324-byte packet contains 323 packed field bytes and one undocumented trailing byte.
+See docs/PROTOCOL.md for field offsets and byte order.
 """
 
 from __future__ import annotations
@@ -18,10 +12,8 @@ from typing import Optional
 
 SCHEMA_ID = "fh6-dataout"
 SCHEMA_VERSION = 1
-BYTE_ORDER = "<"  # assumption P-2: little-endian
+BYTE_ORDER = "<"
 DOCUMENTED_PACKET_LENGTH = 324
-# Lengths that are decoded into live telemetry. 323 (= fields only) is NOT accepted by
-# default because the official document says 324; see decision P-1.
 ACCEPTED_LENGTHS = frozenset({DOCUMENTED_PACKET_LENGTH})
 
 _TYPE_CODES = {
@@ -104,7 +96,7 @@ _ORDERED: list[Field] = [
     Field("Speed", "F32", "m/s", "speed"),
     Field("Power", "F32", "W", "power"),
     Field("Torque", "F32", "N*m", "torque"),
-    # The document says only "Tire temperature": the unit is NOT stated (open question P-4).
+    # Tyre temperature unit is unspecified.
     *_w("TireTemp", "F32", None, "tire temperature, unit not documented"),
     Field("Boost", "F32", "psi", "boost above atmospheric"),
     Field("Fuel", "F32", "fraction", "0 empty .. 1 full", (0.0, 1.0)),
@@ -119,7 +111,7 @@ _ORDERED: list[Field] = [
     Field("Brake", "U8", "0..255", "brake input"),
     Field("Clutch", "U8", "0..255", "clutch input"),
     Field("HandBrake", "U8", "0..255", "handbrake input"),
-    # "Current gear": encoding of reverse/neutral is NOT documented (open question P-3).
+    # Reverse and neutral codes are unspecified.
     Field("Gear", "U8", None, "current gear, R/N encoding undocumented"),
     Field("Steer", "S8", None, "-127 full left, 0 centre, 127 full right", (-127, 127)),
     Field("NormalizedDrivingLine", "S8", None, "-127 .. 127", (-127, 127)),

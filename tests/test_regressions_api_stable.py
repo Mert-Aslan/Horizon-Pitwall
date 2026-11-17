@@ -1,6 +1,4 @@
-"""F-02 / F-04 / F-06 regressions written only against API that already existed in
-0.2.0 (TelemetryHub, Config.validate, events), so the same file can be run against the
-baseline commit to show it failed there (docs/IMPLEMENTATION_STATUS.md, "Fail-first")."""
+"""HTTP and WebSocket API regression tests."""
 
 import math
 

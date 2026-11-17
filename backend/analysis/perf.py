@@ -1,28 +1,7 @@
-"""Performance runs: 0-100 km/h, 100-200 km/h and 100-0 km/h braking.
+"""Live and recorded acceleration and braking runs.
 
-One streaming state machine per run type, used the same way for recordings (offline)
-and for the live stream (armed by the user)::
-
-    armed  --(start crossing between two reliable samples)-->  measuring
-    measuring --(end crossing)--> completed
-    measuring --(gap, empty packet, segment/car change, game-time going back,
-                 position jump, reversing, rule broken, timeout)--> invalid
-
-Times come from the recording/stream clock (monotonic seconds), never from counting
-frames. Both threshold crossings are linearly interpolated between the two neighbouring
-samples, and only if those samples are at most ``MAX_DT`` apart: no start is invented
-from a sample before a gap. With ~16-32 ms between samples the interpolation error is
-in the order of 0.01 s; results are shown with two decimals.
-
-Rules (documented in docs/PROTOCOL.md "Performance runs"):
-  0-100     armed while the car stands (<= 1 km/h); timer starts when speed crosses
-            1 km/h upwards (no roll-out allowance), stops at 100 km/h.
-  100-200   armed below 98 km/h; starts crossing 100 upwards, stops at 200; invalid if
-            the brake is used (> 10 %) or speed drops more than 3 km/h below its peak.
-  100-0     armed above 105 km/h; starts crossing 100 downwards with brake >= 30 %,
-            stops crossing 1 km/h; invalid with throttle > 10 % or speed rising > 3 km/h.
-Reversing = car-local forward velocity below -1 km/h (VelocityZ; forward is +Z, which
-real data supports: AccelerationZ follows d(speed)/dt with r = 0.92).
+Speed crossings are interpolated between consecutive samples within MAX_DT.
+See docs/PROTOCOL.md for run thresholds and invalidation rules.
 """
 
 from __future__ import annotations

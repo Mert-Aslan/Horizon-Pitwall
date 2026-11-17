@@ -857,7 +857,7 @@ details.info[open] {
 /* output & timing */
 .readouts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-3) var(--s-4);
   margin: 0;
 }
@@ -885,10 +885,6 @@ details.info[open] {
   padding-top: var(--s-3);
   border-top: 1px solid var(--line);
 }
-.race-flag {
-  margin: var(--s-2) 0 0;
-}
-
 /* key/value lists */
 .kv {
   margin: 0;

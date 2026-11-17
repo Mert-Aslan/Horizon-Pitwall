@@ -1,5 +1,4 @@
-"""M1 regression tests: stream segments, identity, time model, D-1 policy, D-2 car identity,
-bounded diagnostics. Each test describes the finding it pins (F-02, F-05, F-06, F-07)."""
+"""Stream identity, packet ordering and diagnostics tests."""
 
 import math
 
@@ -25,7 +24,7 @@ def hub(clock):
     return h
 
 
-# ------------------------------------------------------------------ F-02
+# Stream identity
 def test_source_switch_starts_clean_segment_without_old_history(hub, clock):
     for i, v in enumerate((10.0, 11.0, 12.0)):  # 36 / 39.6 / 43.2 km/h
         feed(hub, clock, 100 + i * 16, Speed=v)
@@ -61,7 +60,7 @@ def test_frame_carries_three_clocks(hub, clock):
     assert isinstance(f["received_at"], int)
 
 
-# ------------------------------------------------------------------ F-05 / D-1
+# Equal timestamps
 def test_equal_timestamp_classification():
     a = packet(TimestampMS=5, Speed=10.0)
     assert classify_equal(a, a) == "identical"
@@ -72,8 +71,6 @@ def test_equal_timestamp_classification():
 
 
 def test_default_policy_accepts_new_content_but_not_repeats(hub, clock):
-    # D-1 decision from real data: 217/217 equal-timestamp packets during driving carried
-    # new content; 6402/6402 repeats outside driving were byte-identical.
     assert hub.equal_timestamp_policy == "accept_changed"
     feed(hub, clock, 100, Speed=25.0)
     assert feed(hub, clock, 100, Speed=25.0) == "duplicates"
@@ -117,7 +114,7 @@ def test_tail_only_difference_is_not_new_content(clock):
     assert h.diagnostics()["duplicate_analysis"]["tail_only"] == 1
 
 
-# ------------------------------------------------------------------ F-06 / D-2
+# Car identity
 def run_ordinals(car: CarIdentity, seq, dt=1 / 60, t0=0.0):
     events, t = [], t0
     for o in seq:
@@ -173,7 +170,7 @@ def test_hub_events_for_zero_flicker(hub, clock):
     assert hub.counters["accepted_car_ordinal_zero"] == 90
 
 
-# ------------------------------------------------------------------ F-07
+# Diagnostic bounds
 def test_other_sources_are_bounded_with_overflow_counter(hub, clock):
     feed(hub, clock, 100)
     for i in range(200):

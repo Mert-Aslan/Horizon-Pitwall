@@ -7,9 +7,7 @@ import { store } from "../stream";
 
 export const WINDOW_S = 20;
 
-/** Where the chart's samples and clock come from. Live: the WebSocket store, clock =
- *  browser arrival time. Replay: a ReplayPlayer, clock = recording seconds at the
- *  playhead. Both use the same drawing, cursor and readout. */
+/** Sample history and clock for live or replay charts. */
 export interface TraceSource {
   kind: "live" | "replay";
   history: Ring;
@@ -425,7 +423,7 @@ export function Traces({ live, source = LIVE_SOURCE }: { live: boolean; source?:
         </h2>
         {frozen && (
           <span className="paused-note" role="status">
-            Paused. Live data is still being received.
+            Chart paused
           </span>
         )}
         <div className="traces-controls">
@@ -495,8 +493,8 @@ export function Traces({ live, source = LIVE_SOURCE }: { live: boolean; source?:
         ) : (
           <p className="muted small">
             {replay
-              ? "Point at the chart, or focus it and use the arrow keys, to read the values at a moment."
-              : "Point at the chart, or focus it and use the arrow keys, to read the values at a moment. Click or press Space to pause."}
+              ? "Hover or use the arrow keys to inspect."
+              : "Hover or use the arrow keys to inspect. Click or press Space to pause."}
           </p>
         )}
       </div>

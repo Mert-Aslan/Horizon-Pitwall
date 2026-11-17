@@ -183,7 +183,7 @@ def _normalize(raw: dict[str, Any]) -> tuple[dict, dict, dict]:
             "on_rumble_strip": _flag01(raw, f"WheelOnRumbleStrip{suffix}", q),
             "in_puddle": _flag01(raw, f"WheelInPuddle{suffix}", q),
             "surface_rumble": f(f"SurfaceRumble{suffix}"),
-            # Unit undocumented: value is passed through, never converted (P-4).
+            # Raw tyre temperature.
             "tire_temp": f(f"TireTemp{suffix}"),
         }
 
@@ -196,7 +196,7 @@ def _normalize(raw: dict[str, Any]) -> tuple[dict, dict, dict]:
         "rpm_idle": rpm_idle,
         "gear": {
             "raw": gear_raw,
-            # Forward gears 1..10 by number; 0 and 11 from real observation (P-3).
+            # Observed gear codes: 0 reverse, 11 between gears.
             "label": (str(int(gear_raw)) if gear_raw is not None and 1 <= gear_raw <= 10
                       else OBSERVED_GEAR_CODES[int(gear_raw)][0] if gear_raw in OBSERVED_GEAR_CODES else None),
             "note": OBSERVED_GEAR_CODES[int(gear_raw)][1] if gear_raw in OBSERVED_GEAR_CODES else None,

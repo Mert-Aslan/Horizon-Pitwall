@@ -1,15 +1,5 @@
-// Client-side replay of a saved recording.
-//
-// Nothing here touches the live stream: the server's hub keeps receiving (and possibly
-// recording) while a page replays. Data comes in bounded windows from
-// GET /api/v1/recordings/{id}/frames; at most ~LOOKBACK_S + AHEAD_S seconds are held.
-//
-// Clock: the playhead is in recording seconds (`el`, monotonic time since the recording
-// started), independent of the game's TimestampMS (which may reset or repeat). Samples
-// are ordered by their recording index `i`, so equal game timestamps keep their order.
-//
-// Seek safety: every seek bumps `generation`; a window that arrives for an older
-// generation is dropped, so a slow earlier request never overwrites a newer position.
+// Replay uses bounded fetch windows and a recording-relative clock.
+// Seek generations discard stale responses.
 
 import { Ring, type Sample } from "./history";
 import { isEmptyFrame } from "./stream";

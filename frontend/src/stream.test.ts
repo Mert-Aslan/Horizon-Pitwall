@@ -1,4 +1,4 @@
-// Stream client regression tests (F-01 watchdog, F-03 identity/raw isolation, lifecycle,
+// Stream client regression tests (watchdog, frame identity, raw isolation, lifecycle,
 // runtime validation). A fake environment replaces WebSocket, timers and rAF, so these run
 // in Node without a browser; real-browser behaviour is covered by tools/ui_smoke.py.
 import { describe, expect, it } from "vitest";
@@ -140,7 +140,7 @@ function setup() {
   return { env, store };
 }
 
-describe("F-01 watchdog uses transport time, not render time", () => {
+describe("watchdog uses transport time", () => {
   it("does not close a live socket while rAF is paused (background tab)", () => {
     const { env, store } = setup();
     env.ws.recv(frameMsg("i1", "s1", 1));
@@ -166,7 +166,7 @@ describe("F-01 watchdog uses transport time, not render time", () => {
   });
 });
 
-describe("F-03 stream identity", () => {
+describe("stream identity", () => {
   it("a new segment with the same sequence number is not dropped", () => {
     const { env, store } = setup();
     env.ws.recv(frameMsg("i1", "A", 1, 50));

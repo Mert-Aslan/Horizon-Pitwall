@@ -1,6 +1,3 @@
-// Sessions: find and open saved recordings. Replay and analysis are later milestones; this
-// page only offers what works today (list, summary, labels/notes, integrity check, speed
-// overview).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmt } from "../format";
 import { usePref } from "../prefs";
@@ -210,29 +207,28 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
           </button>
         )}
       </header>
-      {d.status === "recording" && <p className="note">Still recording. Figures below grow every 30 s as chunks are saved.</p>}
+      {d.status === "recording" && <p className="note">Recording in progress. Totals update every 30 s.</p>}
       {d.error && <p className="error-text small">{d.error}</p>}
       {d.samples > 0 && <SpeedOverview id={d.id} samples={d.samples} />}
       <div className="session-cols">
         <dl className="kv">
           {(
             [
-              ["Started", when(d.started_utc)],
+              ["Started", d.title ? when(d.started_utc) : null],
               ["Duration", d.duration_s !== null ? clock(d.duration_s) : "—"],
               ["Samples saved", d.samples.toLocaleString()],
-              ["Dropped (queue full)", d.dropped],
-              ["Lost when stopping", d.lost_on_stop],
-              ["Stream segments", d.segments],
+              ["Dropped samples", d.dropped || null],
+              ["Samples lost on stop", d.lost_on_stop || null],
+              ["Stream segments", d.segments > 1 ? d.segments : null],
               ["Data coverage", s?.coverage !== null && s?.coverage !== undefined ? `${fmt(s.coverage * 100, 1)} %` : "—"],
-              ["Gaps over 250 ms", s ? `${s.gaps_over_250ms} (${fmt(s.gap_time_s, 1)} s)` : "—"],
-              ["Packets without driving data", s?.empty_samples !== undefined ? s.empty_samples.toLocaleString() : "not counted (older recording)"],
+              ["Gaps over 250 ms", s?.gaps_over_250ms ? `${s.gaps_over_250ms} (${fmt(s.gap_time_s, 1)} s)` : null],
+              ["Packets without driving data", s?.empty_samples ? s.empty_samples.toLocaleString() : null],
               ["Top speed", s?.speed_kmh_max !== null && s?.speed_kmh_max !== undefined ? `${fmt(s.speed_kmh_max, 1)} km/h` : "—"],
               ["Average speed", s?.speed_kmh_mean !== null && s?.speed_kmh_mean !== undefined ? `${fmt(s.speed_kmh_mean, 1)} km/h` : "—"],
-              ["Cars (confirmed id: samples)", cars.length ? cars.map(([k, v]) => `#${k}${carName(k)}: ${v.toLocaleString()}`).join(", ") : "none confirmed"],
-              ["Stopped because", d.stop_reason ? d.stop_reason.replace(/_/g, " ") : "—"],
-              ["Format", `${d.chunk_format}, ${d.decoder}, app ${d.app_version}`],
-            ] as [string, string | number][]
-          ).map(([k, v]) => (
+              ["Samples by car", cars.length ? cars.map(([k, v]) => `#${k}${carName(k)}: ${v.toLocaleString()}`).join(", ") : null],
+              ["Stop reason", d.stop_reason && d.stop_reason !== "user" ? d.stop_reason.replace(/_/g, " ") : null],
+            ] as [string, string | number | null][]
+          ).map(([k, v]) => v === null ? null : (
             <div key={k}>
               <dt>{k}</dt>
               <dd className="num">{v}</dd>
@@ -249,8 +245,8 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
           {(
             [
               ["title", "Title"],
-              ["car_label", "Car (your label)"],
-              ["setup_label", "Setup / tune (your label)"],
+              ["car_label", "Car label"],
+              ["setup_label", "Setup label"],
             ] as const
           ).map(([k, label]) => (
             <label key={k} className="field">
@@ -262,7 +258,6 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
             <span>Notes</span>
             <textarea rows={3} value={form.notes} maxLength={2000} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </label>
-          <p className="muted small">The game does not send tuning settings; these labels are what you type.</p>
           <div className="row-actions">
             <button type="submit" className="btn btn-small">
               Save labels
@@ -284,7 +279,7 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
           <span className="small" role="status">
             {verify &&
               (verify.ok
-                ? `All ${d.chunks.length} chunk files match their checksums; ${verify.samples_in_files.toLocaleString()} samples read back.`
+                ? `${d.chunks.length} files verified · ${verify.samples_in_files.toLocaleString()} samples`
                 : `Problems: ${verify.problems.join("; ")}`)}
           </span>
         </div>
@@ -292,7 +287,7 @@ function Detail({ id, onChanged, onReplay, onAnalyze }: { id: string; onChanged:
       {d.events.length > 0 && (
         <section aria-labelledby="sess-events-title">
           <h3 id="sess-events-title" className="sub-title">
-            Events during the recording
+            Recording events
           </h3>
           <ol className="events">
             {d.events.slice(0, 40).map((e, i) => (
@@ -338,8 +333,7 @@ function Recordings({ snap, onReplay, onAnalyze }: { snap: Snapshot; onReplay?: 
       <div className="empty">
         <h1>No recordings yet</h1>
         <p className="muted">
-          Press <strong>Record</strong> in the top bar before you drive. Pitwall saves every accepted packet to this PC until you press Stop, even
-          if this page is closed. Recordings appear here.
+          Press <strong>Record</strong> before driving and <strong>Stop</strong> to save the session. Recording continues if you close this page.
         </p>
       </div>
     );

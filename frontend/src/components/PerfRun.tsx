@@ -93,7 +93,7 @@ export function PerfRun({ perf }: { perf: PerfStatus | null | undefined }) {
           {err}
         </p>
       )}
-      <p className="muted small">Measured by the Pitwall server from the data the game sends (crossings interpolated between samples, ±0.02 s). Record the drive to keep the result.</p>
+      <p className="muted small">Record the drive to save the run.</p>
     </div>
   );
 }

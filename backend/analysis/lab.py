@@ -1,20 +1,6 @@
-"""Telemetry Lab: channel registry, columnar cache and range analyses for recordings.
+"""Telemetry Lab channels and range analyses.
 
-Speed matters here (an hour is ~216 000 samples), so channels are computed straight from
-the unpacked datagram tuple instead of building the full ``normalize`` dictionaries. The
-rules are the same as ``decode.normalize`` (finite check, byte fractions, steer clamp,
-empty packets -> no data) and ``tests/test_lab.py`` checks every channel against
-``normalize`` on the real-game fixtures.
-
-Facts from the first real session (16 Nov 2026) that shape the channel notes:
-  * AccelerationY is ~0 when the car stands still: the accelerations do not include
-    gravity (kinematic acceleration in car-local axes).
-  * AccelerationX correlates with speed x yaw rate (r = 0.95): lateral axis as documented.
-  * DistanceTraveled went negative (-1118 m) during free roam: it is not used; distance is
-    integrated from speed over gap-free consecutive samples.
-
-Every number that is a heuristic (event thresholds, power-curve filter) says so in its
-output. Nothing here claims dyno accuracy, ideal temperatures or tuning advice.
+Channels read packed samples directly. Distance is integrated over contiguous samples.
 """
 
 from __future__ import annotations

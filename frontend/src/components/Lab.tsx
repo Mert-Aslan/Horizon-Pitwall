@@ -1,6 +1,3 @@
-// Telemetry Lab: inspect one recording. Every number comes from the server's full-
-// resolution data for the selected range; the chart draws a min/max envelope per pixel
-// column so short peaks stay visible. Nothing here gives tuning advice.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { clockLabel, fitCanvas, niceRange, niceStep, readPalette, timeTicks, type Palette } from "../chart";
 import { fmt } from "../format";
@@ -357,7 +354,7 @@ function LabChart({
 
 // ------------------------------------------------------------------ side panels
 function GG({ url }: { url: string }) {
-  const { data } = useRangeFetch<{ points: [number, number][]; valid_samples: number; stride: number; combined_g_max: number | null; combined_g_p95: number | null; note: string }>(url);
+  const { data } = useRangeFetch<{ points: [number, number][]; combined_g_max: number | null; combined_g_p95: number | null }>(url);
   const ref = useRef<HTMLCanvasElement | null>(null);
   const pal = useMemo(() => readPalette(), []);
   useEffect(() => {
@@ -379,7 +376,8 @@ function GG({ url }: { url: string }) {
         ctx.beginPath();
         ctx.arc(cx, cy, (g / lim) * r, 0, Math.PI * 2);
         ctx.stroke();
-        if (g % every === 0 || g === lim) ctx.fillText(`${g} g`, cx + 3, cy - (g / lim) * r - 3);
+        // labels just below the horizontal axis, right of each ring (clear of the axis titles)
+        if (g % every === 0 || g === lim) ctx.fillText(`${g} g`, cx + (g / lim) * r + 3, cy + 12);
       }
       ctx.beginPath();
       ctx.moveTo(cx - r, cy);
@@ -410,16 +408,13 @@ function GG({ url }: { url: string }) {
         G-G (lateral × longitudinal)
       </h3>
       <canvas ref={ref} className="lab-square" role="img" aria-label={data ? `Acceleration scatter: peak combined ${fmt(data.combined_g_max, 1)} g, 95th percentile ${fmt(data.combined_g_p95, 1)} g` : "Loading"} />
-      <p className="muted small">
-        {data ? `Peak ${fmt(data.combined_g_max, 1)} g · 95 % below ${fmt(data.combined_g_p95, 1)} g · ${data.valid_samples.toLocaleString()} samples, every ${data.stride}. drawn. ` : ""}
-        Right is positive. Car-local, without gravity. Magnitudes come from the game's physics; they match speed × yaw rate in recorded data.
-      </p>
+      {data && <p className="muted small">Peak {fmt(data.combined_g_max, 1)} g · 95th percentile {fmt(data.combined_g_p95, 1)} g</p>}
     </section>
   );
 }
 
 function Route({ url }: { url: string }) {
-  const { data } = useRangeFetch<{ lines: [number, number][][]; bounds: { x_min: number; x_max: number; z_min: number; z_max: number } | null; jumps: number; note: string }>(url);
+  const { data } = useRangeFetch<{ lines: [number, number][][]; bounds: { x_min: number; x_max: number; z_min: number; z_max: number } | null }>(url);
   const ref = useRef<HTMLCanvasElement | null>(null);
   const pal = useMemo(() => readPalette(), []);
   useEffect(() => {
@@ -473,14 +468,14 @@ function Route({ url }: { url: string }) {
       </h3>
       <canvas ref={ref} className="lab-square" role="img" aria-label="Driven path in game world coordinates; green circle is the start of the range, red square the end" />
       <p className="muted small">
-        Game world X/Z in metres, north unknown; not GPS. Green = start, red = end. Lines break at gaps and empty packets{data?.jumps ? `; ${data.jumps} jump(s) too long for the speed (rewind/teleport)` : ""}.
+        Green marks the start, red marks the end. Breaks mark gaps or jumps.
       </p>
     </section>
   );
 }
 
 function Power({ url }: { url: string }) {
-  const { data } = useRangeFetch<{ bins: { rpm_from: number; rpm_to: number; n: number; power_kw_median: number; torque_median: number | null }[]; samples_used: number; filter: string; note: string }>(url);
+  const { data } = useRangeFetch<{ bins: { rpm_from: number; rpm_to: number; n: number; power_kw_median: number; torque_median: number | null }[] }>(url);
   const bins = (data?.bins ?? []).filter((b) => b.n >= 20);
   const peak = bins.reduce((m, b) => (b.power_kw_median > (m?.power_kw_median ?? -Infinity) ? b : m), null as (typeof bins)[number] | null);
   const max = Math.max(1, ...bins.map((b) => b.power_kw_median));
@@ -492,7 +487,7 @@ function Power({ url }: { url: string }) {
       {!data ? (
         <p className="muted small">Loading…</p>
       ) : bins.length === 0 ? (
-        <p className="muted small">Not enough full-throttle samples in this range ({data.samples_used}).</p>
+        <p className="muted small">Too few full-throttle samples in this range.</p>
       ) : (
         <>
           <div className="power-bars" role="img" aria-label={`Median power per rpm band; highest ${fmt(peak?.power_kw_median)} kW at ${peak?.rpm_from}-${peak?.rpm_to} rpm`}>
@@ -505,7 +500,7 @@ function Power({ url }: { url: string }) {
           </p>
         </>
       )}
-      <p className="muted small">Median of the power the game reports, full throttle only ({data?.samples_used.toLocaleString() ?? "…"} samples; bands with fewer than 20 hidden). Not a dyno measurement.</p>
+      {bins.length > 0 && <p className="muted small">Median power at full throttle. At least 20 samples per band.</p>}
     </section>
   );
 }
@@ -523,7 +518,6 @@ interface Summary {
   full_throttle_s: number;
   braking_s: number;
   grip_lost_s: number;
-  grip_lost_rule: string;
   gear_changes: number;
 }
 
@@ -556,7 +550,6 @@ function RangeSummary({ url }: { url: string }) {
           </div>
         ))}
       </dl>
-      {s && <p className="muted small">Distance integrated from speed (the game's distance field is unreliable). Grip lost: {s.grip_lost_rule}.</p>}
     </section>
   );
 }
@@ -579,9 +572,10 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`server answered ${r.status}`))))
       .then((m: Meta) => {
         if (!alive) return;
-        setMeta(m);
+        const channels = m.channels.filter((channel) => channel.id !== "fuel");
+        setMeta({ ...m, channels });
         setNotes(m.annotations);
-        setSelected(readChannels(new Set(m.channels.map((c) => c.id))));
+        setSelected(readChannels(new Set(channels.map((c) => c.id))));
         setRange([0, Math.max(0.1, m.duration_s)]);
       })
       .catch((e) => alive && setMetaError((e as Error).message));
@@ -619,7 +613,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
       </div>
     );
   }
-  if (!meta || !range) return <p className="muted pad">Preparing the recording for analysis…</p>;
+  if (!meta || !range) return <p className="muted pad">Loading analysis…</p>;
 
   const toggle = (cid: string) => {
     const next = selected.includes(cid) ? selected.filter((c) => c !== cid) : [...selected, cid].slice(-MAX_CHANNELS);
@@ -683,7 +677,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
             Export CSV
           </a>
           <span className="muted small">
-            {loading ? "Loading…" : error ? <span className="text-danger">Could not load: {error}</span> : series ? `${series.samples_in_range.toLocaleString()} samples in range, drawn as min–max per ${series.bucket_s < 1 ? `${fmt(series.bucket_s * 1000)} ms` : `${fmt(series.bucket_s, 1)} s`}` : ""}
+            {loading ? "Loading…" : error ? <span className="text-danger">Could not load: {error}</span> : series ? `${series.samples_in_range.toLocaleString()} samples in range` : ""}
           </span>
         </div>
       </section>
@@ -703,7 +697,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
                     <input type="checkbox" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} />
                     <span>{c.label}</span>
                     <span className="muted small">
-                      {[c.unit ? unitText(c.unit) : "code", c.valid_fraction !== null && c.valid_fraction < 0.999 ? `${fmt(c.valid_fraction * 100)} % with data` : ""].filter(Boolean).join(" · ")}
+                      {[c.unit ? unitText(c.unit) : c.id === "gear" ? "code" : "", c.valid_fraction !== null && c.valid_fraction < 0.999 ? `${fmt(c.valid_fraction * 100)} % with data` : ""].filter(Boolean).join(" · ")}
                     </span>
                   </label>
                 ))}
@@ -714,7 +708,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
         <div className="lab-main">
           <section className="panel" aria-labelledby="lab-chart-title">
             <h2 id="lab-chart-title" className="panel-title">
-              Channels over time <span className="muted small">drag to zoom · amber = recorded/certain event, grey = heuristic, blue = your note · tinted = no data</span>
+              Channels over time <span className="muted small">Drag to zoom · Shading marks gaps</span>
             </h2>
             {selected.length === 0 ? (
               <p className="muted pad">Choose at least one channel.</p>
@@ -723,7 +717,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
             )}
             <div className="lab-readout" aria-live="off">
               {cursor === null ? (
-                <p className="muted small">Point at the chart (or focus it and use the arrow keys) to read values; values are the lowest–highest in that pixel column.</p>
+                <p className="muted small">Hover or use the arrow keys to inspect the min–max values.</p>
               ) : (
                 <dl>
                   <div>
@@ -750,7 +744,7 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
             </div>
             {series && (
               <table className="lab-stats">
-                <caption className="sub-title">Exact statistics over every sample in the range</caption>
+                <caption className="sub-title">Range statistics</caption>
                 <thead>
                   <tr>
                     <th scope="col">Channel</th>
@@ -816,8 +810,8 @@ export function Lab({ id, onClose, onReplayAt }: { id: string; onClose: () => vo
               }}
             >
               <label className="field">
-                <span>Note at {clockText(at(range[0]), true)} (chart cursor, else range start)</span>
-                <input value={noteText} maxLength={500} onChange={(e) => setNoteText(e.target.value)} placeholder="e.g. braked too late into the hairpin" />
+                <span>Note at {clockText(at(range[0]), true)}</span>
+                <input value={noteText} maxLength={500} onChange={(e) => setNoteText(e.target.value)} />
               </label>
               <button type="submit" className="btn btn-small" disabled={!noteText.trim()}>
                 Add note

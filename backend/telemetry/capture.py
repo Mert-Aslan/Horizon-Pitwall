@@ -1,13 +1,6 @@
-"""Bounded diagnostic capture (D-1 evidence collection).
+"""Time- and size-limited capture of incoming UDP datagrams.
 
-A user-started, time- and size-limited capture of *every* datagram the receiver hands to
-the hub (accepted and rejected), with arrival order, process-relative monotonic time,
-source, outcome and the raw bytes. It taps the existing ingest chain (no second socket
-bind on the game port) and only appends to memory while capturing; the gzip file is
-written by a separate thread after the capture ends.
-
-Captures are temporary diagnostics with their own quota (oldest capture files beyond
-``keep_files`` are removed); user recordings are never touched by this module.
+Captures are written after collection and have a separate retention limit.
 """
 
 from __future__ import annotations

@@ -119,18 +119,16 @@ function Compare({ a, b, names }: { a: RunRow; b: RunRow; names: Map<number, Car
     };
   }, [a, b]);
   const warnings: string[] = [];
-  if (a.car_ordinal !== b.car_ordinal) warnings.push("Different cars (different CarOrdinal).");
-  else if (a.pi !== b.pi) warnings.push(`Performance index differs (${fmt(a.pi)} vs ${fmt(b.pi)}): upgrades or tuning changed.`);
+  if (a.car_ordinal !== b.car_ordinal) warnings.push("Different cars.");
+  else if (a.pi !== b.pi) warnings.push(`Different PI (${fmt(a.pi)} vs ${fmt(b.pi)}).`);
   if (a.mode !== b.mode) warnings.push("One run is from demo data.");
-  if (!a.setup_label && !b.setup_label) warnings.push("No setup labels: add them in Sessions so you know what changed. The game does not send tuning settings.");
-  warnings.push("Road, surface, weather and slope are not in the data; runs from different places may not be comparable.");
   const dt = a.time_s !== null && b.time_s !== null ? b.time_s - a.time_s : null;
   const dd = a.distance_m !== null && b.distance_m !== null ? b.distance_m - a.distance_m : null;
   const rows: [string, string, string][] = [
     ["Time", `${fmt(a.time_s, 2)} s`, `${fmt(b.time_s, 2)} s`],
     ["Distance", `${fmt(a.distance_m, 1)} m`, `${fmt(b.distance_m, 1)} m`],
     ["Car", carText(a, names), carText(b, names)],
-    ["Setup (your label)", a.setup_label || "—", b.setup_label || "—"],
+    ["Setup", a.setup_label || "—", b.setup_label || "—"],
     ["PI", fmt(a.pi), fmt(b.pi)],
     ["Recorded", when(a.started_utc), when(b.started_utc)],
     ["Largest sample gap", `${fmt(a.max_dt_s * 1000)} ms`, `${fmt(b.max_dt_s * 1000)} ms`],
@@ -146,7 +144,7 @@ function Compare({ a, b, names }: { a: RunRow; b: RunRow; names: Map<number, Car
       </p>
       {ta && tb ? <Overlay a={ta} b={tb} /> : <p className="muted small">Loading the runs…</p>}
       <p className="small">
-        <span className="legend-a">━ A</span> <span className="legend-b">━ B</span> <span className="muted">speed (km/h) against time from each run's start; dot = finish</span>
+        <span className="legend-a">━ A</span> <span className="legend-b">━ B</span> <span className="muted">Speed (km/h) · Dots mark the finish</span>
       </p>
       <table>
         <thead>
@@ -166,11 +164,13 @@ function Compare({ a, b, names }: { a: RunRow; b: RunRow; names: Map<number, Car
           ))}
         </tbody>
       </table>
-      <ul className="runs-warnings small">
-        {warnings.map((w) => (
-          <li key={w}>{w}</li>
-        ))}
-      </ul>
+      {warnings.length > 0 && (
+        <ul className="runs-warnings small">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -192,7 +192,7 @@ export function Runs() {
       alive = false;
     };
   }, []);
-  if (rows === null) return <p className="muted pad">{failed ? "Runs could not be loaded." : "Looking for runs in your recordings (first time may take a moment)…"}</p>;
+  if (rows === null) return <p className="muted pad">{failed ? "Could not load runs." : "Loading runs…"}</p>;
   const shown = rows.filter((r) => r.kind === kind && (!validOnly || r.valid));
   const best = shown.filter((r) => r.valid && r.time_s !== null).reduce<RunRow | null>((m, r) => (m === null || r.time_s! < m.time_s! ? r : m), null);
   const pick = (r: RunRow) => {
@@ -205,7 +205,7 @@ export function Runs() {
       <section className="panel" aria-labelledby="runs-title">
         <div className="panel-head">
           <h2 id="runs-title" className="panel-title">
-            Runs found in your recordings
+            Recorded runs
           </h2>
           <div className="row-actions">
             <label className="inline-field">
@@ -229,12 +229,8 @@ export function Runs() {
             </label>
           </div>
         </div>
-        <p className="muted small">
-          Found automatically in every recording, so many are simply part of normal driving. A run is valid only with reliable samples at both speed crossings
-          and no gap, empty packet, jump, rewind, reversing or car change in between. Pick two to compare.
-        </p>
         {shown.length === 0 ? (
-          <p className="muted pad">No {validOnly ? "valid " : ""}runs of this type yet. Arm one in Live → Performance run while recording, or drive one and record it.</p>
+          <p className="muted pad">No {validOnly ? "valid " : ""}runs of this type. Record a drive to add runs.</p>
         ) : (
           <div className="table-wrap">
             <table className="runs-table">
@@ -276,7 +272,7 @@ export function Runs() {
           </div>
         )}
       </section>
-      {chosen.length === 2 ? <Compare a={chosen[0]} b={chosen[1]} names={names} /> : <p className="muted small pad">Select two runs of the same type to compare them.</p>}
+      {chosen.length === 2 ? <Compare a={chosen[0]} b={chosen[1]} names={names} /> : shown.length >= 2 && <p className="muted small pad">Select two runs to compare.</p>}
     </div>
   );
 }

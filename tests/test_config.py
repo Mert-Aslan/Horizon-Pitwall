@@ -1,4 +1,4 @@
-"""F-04: strict configuration validation (CLI and JSON share one validator)."""
+"""Configuration validation tests."""
 
 import json
 import math

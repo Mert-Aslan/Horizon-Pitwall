@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 from backend.buildinfo import backend_digest, read_ui_manifest  # noqa: E402
 from backend.config import APP_VERSION  # noqa: E402
 
-INCLUDE_FILES = ["forza_horizon_6_telemetry.py", "requirements.txt", "README.md", "pitwall.config.example.json",
+INCLUDE_FILES = ["forza_horizon_6_telemetry.py", "requirements.txt", "README.md", "LICENSE", "pitwall.config.example.json",
                  "Start Pitwall.cmd", "Install Pitwall.cmd", "docs/INSTALL.md", "docs/PROTOCOL.md", "docs/STORAGE_FORMAT.md"]
 INCLUDE_DIRS = ["backend", "frontend/dist"]
 SKIP = {"__pycache__", ".pytest_cache"}

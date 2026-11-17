@@ -59,10 +59,7 @@ class Config:
     open_browser: bool = False
     data_dir: str = ""
     log_level: str = "INFO"
-    # D-1: what to do with a packet whose TimestampMS equals the previous accepted one.
-    # Byte-identical repeats are always rejected. "accept_changed" (default since 0.3.1,
-    # based on real data) keeps new content that arrives with an unchanged timestamp;
-    # "reject" restores the 0.2/0.3.0 behaviour. See docs/PROTOCOL.md D-1.
+    # Byte-identical repeats are rejected. This policy applies to changed packets at the same timestamp.
     equal_timestamp_policy: str = "accept_changed"
     recorder_queue_size: int = 20_000
     diagnostic_capture_max_mb: float = 16.0

@@ -118,7 +118,6 @@ export interface Normalized {
   power_w: N;
   torque_nm: N;
   boost_psi: N;
-  fuel_fraction: N;
   distance_m: N;
   car: {
     ordinal: N;

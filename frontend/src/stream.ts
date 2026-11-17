@@ -1,16 +1,5 @@
-// Live stream client: one WebSocket, reconnect with backoff + jitter, runtime message
-// validation, stream identity and render batching.
-//
-// Two clocks are kept apart on purpose:
-//  * transport liveness (`lastRxAt`) is updated the moment a message arrives. The
-//    watchdog uses only this, so a background tab whose requestAnimationFrame is paused
-//    is not mistaken for a dead server (finding F-01);
-//  * React snapshots are committed at most once per animation frame (`schedule`).
-//
-// Identity (finding F-03): a frame belongs to (server_instance_id, stream_segment_id);
-// `sequence` is only compared inside that pair. A new pair clears the trace history, the
-// sequence memory and the raw sample, so nothing from the previous stream leaks into the
-// new one.
+// Transport liveness uses message receipt time. Rendering is batched separately.
+// Frame sequences are scoped to the server instance and stream segment.
 
 import { useSyncExternalStore } from "react";
 import { Ring } from "./history";
@@ -301,8 +290,7 @@ export class TelemetryStore {
   onMessage(text: string): void {
     const now = this.env.now();
     this.lastRxAt = now;
-    // Acknowledge on receipt (not on render): the server limits unacknowledged messages,
-    // so a slow link gets fewer, fresher frames instead of a growing backlog.
+    // Acknowledge receipt independently of rendering.
     this.rxCount++;
     if (this.ackEvery > 0 && this.rxCount % this.ackEvery === 0) this.send({ type: "ack", n: this.rxCount });
     const msg = parseMessage(text);
@@ -345,7 +333,7 @@ export class TelemetryStore {
     } else {
       const key = streamKey(frame, this.instance);
       if (key !== this.key) {
-        // New stream: nothing from the previous one may be shown as if it belonged here.
+        // Reset state when the stream changes.
         this.history.clear();
         this.key = key;
         this.lastSeq = -1;

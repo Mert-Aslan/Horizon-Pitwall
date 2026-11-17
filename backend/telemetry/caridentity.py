@@ -1,18 +1,6 @@
-"""Car identity with hysteresis (finding D-2).
+"""Car identity tracking with hysteresis.
 
-Real sessions show valid packets carrying ``CarOrdinal = 0`` for a few seconds at a time
-(``4156 -> 0 -> 4156``). What 0 means is not documented; it is *not* assumed to be a
-car. The raw ordinal is never altered; this tracker derives a display/identity state:
-
-  unknown                  nothing confirmed yet
-  candidate                a new non-zero ordinal is being observed
-  confirmed                ``confirmed_ordinal`` is the stable live identity
-  temporarily_unavailable  packets currently carry 0/None; the previous confirmed
-                           identity is kept but flagged as not live-verified
-  unavailable              0/None for longer than ``unavailable_after_s``
-
-Only a confirmed A -> B transition is reported as a car change. Thresholds are
-provisional (synthetic fixtures; to be revisited with real captures).
+Zero or missing ordinals retain the last confirmed ID until the unavailable timeout.
 """
 
 from __future__ import annotations

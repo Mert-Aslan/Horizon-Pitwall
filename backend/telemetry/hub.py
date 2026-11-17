@@ -1,41 +1,7 @@
-"""TelemetryHub: the thread-safe heart of the live pipeline.
+"""Thread-safe telemetry ingestion and stream state.
 
-The UDP receiver thread (or the demo generator) calls ``ingest``. Everything else
-(HTTP, WebSocket, recorder) reads snapshots or receives non-blocking callbacks. All ages
-are computed from a monotonic clock on the server; the browser never compares its wall
-clock with ours.
-
-Identity (docs/ARCHITECTURE.md, "Identity and time"):
-  * ``server_instance_id``  random per process start
-  * ``stream_segment_id``   one continuous stream from one bound source in one mode. A new
-                            segment starts on the first packet, after a source switch and
-                            after a mode change. History, rate estimate, car identity and
-                            ordering state are per segment. ``session_id`` in frames is a
-                            deprecated alias of ``stream_segment_id`` (API v1 compatibility).
-  * ``sequence``            1, 2, 3 ... within a segment (generated here, NOT by the game);
-                            compare only together with (server_instance_id, stream_segment_id).
-  * ``recording_session_id`` belongs to the recorder (backend/recording), not to the hub.
-
-Time: every frame carries the raw ``game_timestamp_ms``, ``segment_elapsed_ms`` (process
-monotonic time since the segment started; use this for intervals) and ``received_at``
-(UTC wall clock in ms; for humans, never for intervals).
-
-Ordering policy for TimestampMS (u32, "can overflow to 0 eventually"):
-  * newer                -> accepted
-  * equal                -> byte-identical / tail-only: ``duplicates`` (rejected). With new
-                            content (real data: 217/217 such packets during driving had
-                            28-49 changed fields) accepted under the default
-                            "accept_changed" policy; "reject" restores 0.2 behaviour (D-1)
-  * wraparound           -> accepted (previous near 2^32, new near 0)
-  * slightly older       -> out-of-order datagram, rejected (counts as reorder)
-  * much older           -> reset *candidate*; only after RESET_CONFIRM consecutive,
-                            mutually increasing candidates is the reset accepted. A single
-                            backwards timestamp never resets anything.
-Arrival order is not proof of the game's simulation order; it is only what we received.
-
-Source policy: the first sender is bound to the segment. Packets from other senders are
-rejected (and listed, bounded, in diagnostics) until the bound sender has been silent for
-``source_switch_after_s``; then the new sender starts a new segment.
+The hub binds to one UDP sender per stream segment.
+See docs/ARCHITECTURE.md for stream identity and clocks, and docs/PROTOCOL.md for packet ordering.
 """
 
 from __future__ import annotations
@@ -289,7 +255,7 @@ class TelemetryHub:
 
     def _analyse_duplicate(self, data: bytes, raw: dict) -> str:
         """Equal TimestampMS: is it the same packet again, or new content with an
-        unchanged timestamp? (Finding D-1.) Returns the classification."""
+        unchanged timestamp? Returns the classification."""
         race = raw.get("IsRaceOn")
         self.counters["dup_race_on" if race == 1 else "dup_race_off"] += 1
         prev = self._last_bytes

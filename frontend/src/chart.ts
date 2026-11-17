@@ -1,5 +1,4 @@
-// Shared chart primitives for the live trace (Traces) and the Telemetry Lab: one palette
-// from the design tokens, one time-tick rule, one canvas sizing rule.
+// Chart sizing, ticks and colors used in Live and Lab.
 
 export interface Palette {
   text: string;
@@ -74,8 +73,7 @@ export function fitCanvas(c: HTMLCanvasElement): { ctx: CanvasRenderingContext2D
   if (!ctx) return null;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
-  // A context keeps its drawing state between redraws; start every draw from defaults
-  // (a left-over textAlign = "center" once cut the axis labels in half).
+  // Reset drawing state between redraws.
   ctx.textAlign = "start";
   ctx.textBaseline = "alphabetic";
   ctx.lineWidth = 1;

@@ -1,6 +1,4 @@
-"""M2: recorder state machine, storage, failure handling and crash recovery.
-
-The hub is fed with synthetic packets in-process; files go to pytest's tmp_path only."""
+"""Recorder state, storage and crash recovery tests."""
 
 import gzip
 import json

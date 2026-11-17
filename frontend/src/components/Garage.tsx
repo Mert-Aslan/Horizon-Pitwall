@@ -96,7 +96,7 @@ export function Garage({ snap }: { snap: Snapshot }) {
   const liveCar = snap.frame?.normalized.car;
 
   if (!loaded) return <p className="muted pad">Loading the garage…</p>;
-  if (failed) return <p className="muted pad">The car list could not be loaded from the server.</p>;
+  if (failed) return <p className="muted pad">Could not load cars.</p>;
 
   const ordinals = new Set<number>([...seen.map((s) => s.ordinal), ...names.keys()]);
   if (live !== null && live > 0) ordinals.add(live);
@@ -118,8 +118,8 @@ export function Garage({ snap }: { snap: Snapshot }) {
     }
     window.dispatchEvent(new Event(CARS_CHANGED));
     const parts = [`${body.added} added`, `${body.updated} updated`];
-    if (body.kept_user_entries.length) parts.push(`${body.kept_user_entries.length} kept because you named them yourself`);
-    if (body.conflicts.length) parts.push(`${body.conflicts.length} not changed (named by another list: ${body.conflicts.slice(0, 3).map((c: { ordinal: number }) => `#${c.ordinal}`).join(", ")})`);
+    if (body.kept_user_entries.length) parts.push(`${body.kept_user_entries.length} of your names kept`);
+    if (body.conflicts.length) parts.push(`${body.conflicts.length} conflicts (${body.conflicts.slice(0, 3).map((c: { ordinal: number }) => `#${c.ordinal}`).join(", ")})`);
     if (body.invalid.length) parts.push(`${body.invalid.length} invalid lines skipped`);
     setImportMsg(`Imported from ${body.source.replace(/^import:/, "")}: ${parts.join(", ")}.`);
   };
@@ -141,18 +141,13 @@ export function Garage({ snap }: { snap: Snapshot }) {
             </a>
           </div>
         </div>
-        <p className="muted small">
-          The game only sends a number for each car. Pitwall does not come with a list of names, so it never guesses: name a car once here and that name is
-          used everywhere. Imported lists show where they came from and never replace a name you typed. Power, PI and drivetrain on screen always come from
-          the game, not from this list.
-        </p>
         {importMsg && (
           <p className="small" role="status">
             {importMsg}
           </p>
         )}
         {rows.length === 0 ? (
-          <p className="muted pad">No cars yet. Drive with Data Out on (and record) and the cars you use appear here.</p>
+          <p className="muted pad">No cars yet. Start driving with Data Out on or import a car list.</p>
         ) : (
           <ul className="garage-list">
             {rows.map((o) => {

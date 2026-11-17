@@ -3,9 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./styles.css";
 
-// `npm run build:profile` aliases react-dom to its profiling build so the Profiler below
-// reports commit durations (window.__pitwallCommits) for tools/ui_capture.py. In the
-// normal production build onRender is never called and this costs nothing.
+// The profiling build collects React commit times for tools/ui_capture.py.
 declare global {
   interface Window {
     __pitwallCommits?: number[];

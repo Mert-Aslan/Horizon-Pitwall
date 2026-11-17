@@ -53,7 +53,6 @@ interface Diag {
   recorder?: RecorderStatus & { mode_mismatch: number; flush_ms_max: number; chunks_written: number };
   build?: { build_id: string; server_instance_id: string; started_at_utc: string; ui: { ui_version: string; ui_build_id: string } | null };
   paths?: { data_dir?: string; logs?: string };
-  notes: string[];
 }
 
 function usePoll<T>(url: string, everyMs: number): [T | null, () => void] {
@@ -106,17 +105,20 @@ const pairs = (o: Record<string, number> | undefined) =>
         .join(" · ")
     : "—";
 
+function changedFields(fields: Record<string, number>) {
+  return Object.fromEntries(Object.entries(fields).filter(([name]) => name !== "Fuel"));
+}
+
 function RawTable({ caps, frame, raw }: { caps: Capabilities | null; frame: Frame | null; raw: RawSample | null }) {
   const [filter, setFilter] = useState("");
   const values = raw?.values;
-  // Quality flags belong to the frame they were computed for; only show them when the
-  // raw sample is that same frame.
+  // Match quality flags to their sample.
   const quality = raw && frame && raw.sequence === frame.sequence ? frame.quality.fields : undefined;
   const body = useMemo(() => {
     if (!caps) return null;
     const f = filter.trim().toLowerCase();
     return caps.schema.fields
-      .filter((s) => !f || s.name.toLowerCase().includes(f))
+      .filter((s) => s.name !== "Fuel" && s.name.toLowerCase().includes(f))
       .map((s) => {
         const q = quality?.[s.name];
         const v = values ? values[s.name] : undefined;
@@ -162,7 +164,7 @@ function RawTable({ caps, frame, raw }: { caps: Capabilities | null; frame: Fram
           </thead>
           <tbody>{body}</tbody>
         </table>
-        {!raw && <p className="muted pad">No packet decoded in this stream yet.</p>}
+        {!raw && <p className="muted pad">No decoded packets yet.</p>}
       </div>
     </section>
   );
@@ -182,7 +184,7 @@ function CapturePanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ seconds, mask_sources: mask }),
       });
-      if (r.status === 403) setMsg("This device may only view; start the capture on the Pitwall PC.");
+      if (r.status === 403) setMsg("Start the capture on the Pitwall PC.");
       else if (r.status === 409) setMsg("A capture is already running.");
       else if (!r.ok) setMsg(`The server answered ${r.status}.`);
     } catch {
@@ -191,12 +193,12 @@ function CapturePanel() {
     refresh();
   };
   const last = data?.captures?.[0];
+  const changed = last ? changedFields(last.changed_fields_top) : {};
   return (
     <section className="panel" aria-labelledby="capture-title">
       <h2 id="capture-title" className="panel-title">Diagnostic capture</h2>
       <p className="muted small">
-        Saves every datagram (accepted and rejected) for a short time, with arrival order and outcome, to the local data folder. Use it while
-        driving, ideally through a menu or pause, to settle open protocol questions. Nothing is uploaded.
+        Saves incoming UDP packets to the local data folder.
       </p>
       <div className="row-actions">
         <button type="button" className="btn btn-small" disabled={busy} onClick={() => void start(30)}>
@@ -231,7 +233,7 @@ function CapturePanel() {
             ]}
           />
           <p className="mono small">{pairs(last.outcomes)}</p>
-          {Object.keys(last.changed_fields_top).length > 0 && <p className="mono small">changed: {pairs(last.changed_fields_top)}</p>}
+          {Object.keys(changed).length > 0 && <p className="mono small">Changed fields · {pairs(changed)}</p>}
         </>
       )}
     </section>
@@ -247,6 +249,7 @@ export function Diagnostics({ snap, view, caps }: { snap: Snapshot; view: ViewSt
   const st = snap.status;
   const c = d?.counters ?? {};
   const dup = d?.duplicate_analysis;
+  const changed = dup ? changedFields(dup.changed_fields_top) : {};
   const rec = d?.recorder;
   const client = d?.ui_clients?.[d.ui_clients.length - 1];
   return (
@@ -306,21 +309,16 @@ export function Diagnostics({ snap, view, caps }: { snap: Snapshot; view: ViewSt
             ["Accepted with CarOrdinal = 0", c.accepted_car_ordinal_zero ?? 0],
           ]}
         />
-        {dup && dup.changed > 0 && (
+        {Object.keys(changed).length > 0 && (
           <>
-            <h3 className="sub-title">Fields that changed under an unchanged timestamp</h3>
-            <p className="mono small">{pairs(dup.changed_fields_top)}</p>
+            <h3 className="sub-title">Changed fields at the same timestamp</h3>
+            <p className="mono small">{pairs(changed)}</p>
           </>
         )}
         <h3 className="sub-title">Lengths seen (bytes: count)</h3>
         <p className="mono">{pairs(d?.length_histogram)}</p>
         <h3 className="sub-title">Trailing byte 324 (hex: count)</h3>
         <p className="mono">{pairs(d?.tail_values_hex)}</p>
-        {d?.notes.map((n) => (
-          <p key={n} className="muted small">
-            {n}
-          </p>
-        ))}
       </section>
 
       <section className="panel" aria-labelledby="events-title">
@@ -377,12 +375,6 @@ export function Diagnostics({ snap, view, caps }: { snap: Snapshot; view: ViewSt
             ["Slowest chunk flush", rec ? `${fmt(rec.flush_ms_max, 1)} ms` : null],
           ]}
         />
-        {caps && (
-          <>
-            <h3 className="sub-title">Protocol verification</h3>
-            <KV rows={Object.entries(caps.verification).map(([k, v]) => [k.replace(/_/g, " "), v])} />
-          </>
-        )}
       </section>
 
       <CapturePanel />

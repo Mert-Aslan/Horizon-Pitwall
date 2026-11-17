@@ -1,26 +1,7 @@
-"""Recording storage: SQLite metadata + independent gzip JSONL chunk files.
+"""SQLite recording metadata and gzip JSONL chunks.
 
-Layout (under ``<data_dir>/recordings``)::
-
-    pitwall.sqlite3                  metadata (WAL)
-    <recording_id>/chunk-00000.jsonl.gz
-    <recording_id>/chunk-00001.jsonl.gz.partial   (being written; never referenced by the DB)
-
-Ownership: the recorder's single writer thread is the only code that writes to the
-database (``Store.writer()``); HTTP handlers use short-lived read connections
-(``Store.read()``). Transactions are explicit (``with conn:`` commits or rolls back);
-this does not rely on Python 3.12+'s ``autocommit`` attribute, so behaviour is the same
-on 3.11 and 3.13.
-
-Chunk line format (format "pitwall-jsonl-v1"), one JSON object per accepted datagram::
-
-    {"i": recording sample index, "seg": segment index, "sq": sequence within the stream
-     segment, "ts": game TimestampMS, "el": seconds since recording start (process
-     monotonic), "w": UTC wall clock ms, "d": base64 of the original datagram}
-
-Only the original datagram is stored (lossless); normalized values are re-derived with
-the decoder on read. A future decoder can re-read old recordings; files are never
-rewritten in place.
+The recorder owns the write connection. API requests use short-lived read connections.
+Raw datagrams are decoded on read. See docs/STORAGE_FORMAT.md.
 """
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
-// Display-only formatting. Stored/streamed values are never rounded; only these
-// helpers turn them into text. Missing values render as an em dash, never as 0.
+// Display formatting for telemetry values.
 
 import type { N } from "./types";
 

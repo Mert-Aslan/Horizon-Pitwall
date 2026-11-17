@@ -1,19 +1,6 @@
-"""Headless browser smoke test of the Pitwall UI (Python Playwright, webapp-testing style).
+"""Browser smoke tests against an isolated Pitwall instance.
 
-Self-hosting: starts its own isolated Pitwall (tools/isolated_server.py: PID + process
-tree tracking, protected ports 5607/8080 refused), restarts it once for the reconnect
-check, and verifies the test ports are free at the end.
-
-    python tools/ui_smoke.py [--web-port 18100] [--udp-port 15620] [--out docs/screenshots/smoke]
-
-Covers: demo labelling and live values, Diagnostics inspector + filter, Focus view and
-its persistence, chart keyboard inspection, pause / back to live while data keeps
-arriving, demo stop feedback, waiting -> receiving -> stale with dimmed values, server
-restart and reconnect, phone and 200 %-zoom widths, console/page errors.
-0.3.0 additions: background tab keeps its WebSocket (F-01), Record/Stop mirrors the
-server state, Sessions list/detail/labels/integrity check, a recording keeps running with
-the page closed, diagnostic capture from the UI, new server instance after restart.
-Exits non-zero if any check fails.
+Run python tools/ui_smoke.py --help for ports and screenshot options.
 """
 
 from __future__ import annotations
@@ -77,8 +64,7 @@ def main() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(viewport={"width": 1920, "height": 1080})
-        # Count WebSocket constructions/closes inside the page (Playwright's "websocket"
-        # event did not report the reconnects of the 0.2.0 bundle reliably).
+        # Count WebSocket connections in the page.
         ctx.add_init_script(WS_COUNTER)
         page = ctx.new_page()
         page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
@@ -96,6 +82,7 @@ def main() -> int:
             speed = page.locator(".speed-num").inner_text()
             check(speed.isdigit(), f"speed renders a number ({speed!r})")
             check(page.locator(".gear-num").inner_text() != "—", "gear renders")
+            check(page.get_by_text("Fuel", exact=True).count() == 0, "live has no fuel gauge")
             check(page.locator(".car-name").inner_text() == "Demo car", "demo car labelled")
             box = page.locator(".speed-num").bounding_box()
             page.wait_for_timeout(700)
@@ -156,7 +143,9 @@ def main() -> int:
             page.get_by_role("button", name="Diagnostics").click()
             page.wait_for_selector("table tbody tr", timeout=5_000)
             page.wait_for_timeout(800)
-            check(page.locator("table tbody tr").count() == 88, "inspector lists 88 fields")
+            check(page.locator(".inspector tbody tr").count() == 87, "inspector lists supported fields")
+            page.get_by_label("Filter fields").fill("Fuel")
+            check(wait_until(lambda: page.locator(".inspector tbody tr").count() == 0), "fuel is excluded from the inspector")
             page.get_by_label("Filter fields").fill("TireTemp")
             check(wait_until(lambda: page.locator("table tbody tr").count() == 4), "filter narrows to 4 tyre temps")
             page.get_by_role("button", name="Live").click()
@@ -197,7 +186,7 @@ def main() -> int:
             feeder.empty = False
             check(wait_until(lambda: page.locator(".conn").inner_text().strip() == "Receiving"), "real data again -> Receiving")
 
-            # M5 live performance run: arm, see the server's state, cancel
+            # live performance run: arm, see the server's state, cancel
             perf = page.locator(".perf-run")
             check(perf.count() == 1, "Performance run control shown in Live")
             perf.locator("select").select_option("accel_0_100")
@@ -209,10 +198,7 @@ def main() -> int:
             perf.get_by_role("button", name="Cancel").click()
             check(wait_until(lambda: perf.get_by_role("button", name="Arm").count() == 1), "Cancel returns to Arm")
 
-            # F-01 in a real browser. Headless Chromium does not hide a tab that is moved to
-            # the background, so the background condition that matters - requestAnimationFrame
-            # not running - is reproduced by holding back rAF callbacks for 6 s while data
-            # keeps arriving. (0.2.0 closed the socket after ~3 s in this situation.)
+            # Suspend animation frames while telemetry continues.
             n_sock = page.evaluate("window.__ws.made")
             page.evaluate("""() => { window.__rafHeld = []; window.__rafOrig = window.requestAnimationFrame;
                 window.requestAnimationFrame = (cb) => { window.__rafHeld.push(cb); return 0; }; }""")
@@ -238,18 +224,19 @@ def main() -> int:
             check(wait_until(lambda: page.locator(".session-row").count() >= 1), "Sessions lists the recording")
             check(wait_until(lambda: int(page.locator(".session-detail .kv div:has(dt:text('Samples saved')) dd").inner_text().replace(",", "").replace(".", "")) > 100), "detail shows saved samples")
             page.get_by_role("button", name="Check files").click()
-            check(wait_until(lambda: "match their checksums" in page.locator(".session-detail").inner_text()), "integrity check passes in the UI")
-            page.get_by_label("Car (your label)").fill("Smoke car")
+            check(wait_until(lambda: "files verified" in page.locator(".session-detail").inner_text()), "integrity check passes in the UI")
+            page.get_by_label("Car label").fill("Smoke car")
             page.get_by_role("button", name="Save labels").click()
             check(wait_until(lambda: "Saved." in page.locator(".session-detail").inner_text()), "labels saved")
             check(wait_until(lambda: "Smoke car" in page.locator(".session-row").first.inner_text()), "list shows the new label")
             check(page.locator(".overview-canvas").count() == 1, "speed overview drawn")
 
-            # M3 replay: client-side, does not touch the live stream
+            # replay: client-side, does not touch the live stream
             seq_live0 = page.evaluate("fetch('/api/v1/telemetry/latest').then(r => r.json()).then(j => j.status.sequence)")
             page.locator(".session-replay").click()
             check(wait_until(lambda: page.locator(".replay-bar .mode-replay").is_visible()), "Replay opens with a Replay badge")
             check(wait_until(lambda: page.locator(".speed-num").count() == 1), "replay shows the cockpit panels")
+            check(page.get_by_text("Fuel", exact=True).count() == 0, "replay has no fuel gauge")
             check(page.locator(".conn").inner_text().strip().startswith("Live:"), "top bar labels the live link, not the replay, as Receiving")
             check("before the playhead" in page.locator("#traces-title").inner_text(), "chart follows the playhead")
             rid = page.evaluate("fetch('/api/v1/recordings').then(r => r.json()).then(j => j.recordings[0].id)")
@@ -275,19 +262,19 @@ def main() -> int:
             page.get_by_role("button", name="Close replay").click()
             check(wait_until(lambda: page.locator(".session-row").count() >= 1 and page.locator(".replay-bar").count() == 0), "Close replay returns to Sessions")
 
-            # M5 runs & comparison view
+            # runs & comparison view
             page.get_by_role("button", name="Runs & comparison").click()
             check(wait_until(lambda: page.locator(".runs-table").count() == 1 or "No " in page.locator(".runs").inner_text(), timeout=15), "Runs view lists runs or explains that there are none")
             if page.locator(".runs-table tbody tr").count() >= 2:
                 page.locator(".runs-table tbody input[type=checkbox]").nth(0).check()
                 page.locator(".runs-table tbody input[type=checkbox]").nth(1).check()
-                check(wait_until(lambda: page.locator(".runs-overlay").count() == 1 and "Road, surface" in page.locator(".runs-warnings").inner_text()), "two runs compared with their limits stated")
+                check(wait_until(lambda: page.locator(".runs-overlay").count() == 1), "two runs compared")
             page.get_by_role("button", name="Recordings").click()
             page.wait_for_selector(".session-row")
 
-            # M6 Garage: name a car id, see provenance, export, import, remove
+            # Garage: name a car id, see provenance, export, import, remove
             page.get_by_role("button", name="Garage").click()
-            check(wait_until(lambda: "never guesses" in page.locator(".garage").inner_text()), "Garage explains that names are the user's own")
+            page.get_by_role("heading", name="Garage").wait_for()
             page.get_by_label("Name another car id").fill("4210")
             page.get_by_role("button", name="Add").click()
             page.get_by_label("Name", exact=True).fill("Smoke Hypercar")
@@ -302,7 +289,7 @@ def main() -> int:
             f.write_text(_json.dumps({"format": "pitwall-car-aliases", "format_version": 1, "game": "fh6", "source": "smoke list", "version": "1",
                                       "cars": [{"ordinal": 4210, "name": "Other"}, {"ordinal": 77, "name": "Seventy-seven"}]}), encoding="utf-8")
             page.locator(".file-btn input").set_input_files(str(f))
-            check(wait_until(lambda: "1 added" in page.locator(".garage").inner_text() and "kept because you named them yourself" in page.locator(".garage").inner_text()),
+            check(wait_until(lambda: "1 added" in page.locator(".garage").inner_text() and "of your names kept" in page.locator(".garage").inner_text()),
                   "import adds new names and keeps the user's own")
             check("imported from smoke list" in page.locator(".garage-list").inner_text(), "imported name shows where it came from")
             f.unlink(missing_ok=True)
@@ -315,9 +302,12 @@ def main() -> int:
             page.get_by_role("button", name="Sessions").click()
             page.wait_for_selector(".session-row")
 
-            # M4 Telemetry Lab on the same recording
+            # Telemetry Lab on the same recording
+            page.evaluate("localStorage.setItem('pitwall.lab.channels', JSON.stringify(['fuel', 'speed', 'throttle', 'brake', 'steer']))")
             page.locator(".session-analyze").click()
             check(wait_until(lambda: page.locator(".lab-stats tbody tr").count() >= 1, timeout=10), "Analyze opens the Lab with exact statistics")
+            check(page.get_by_role("checkbox", name="Fuel").count() == 0, "Lab has no fuel channel")
+            check("fuel" not in page.get_by_role("link", name="Export CSV").get_attribute("href"), "CSV ignores saved fuel selections")
             check(page.locator(".lab-bar .mode-lab").is_visible() and page.locator(".conn").inner_text().strip().startswith("Live:"), "Lab badge shown; top bar describes the live link")
             api_max = page.evaluate(f"fetch('/api/v1/recordings/{rid}/lab/series?channels=speed').then(r => r.json()).then(j => j.channels.speed.stats.max)")
             row = page.locator(".lab-stats tbody tr", has_text="Speed").inner_text().split("\t")

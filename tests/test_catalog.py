@@ -1,4 +1,4 @@
-"""M6: local car names with provenance, safe imports, and data-version guards."""
+"""Car catalog, import provenance and format compatibility tests."""
 
 import json
 import sqlite3

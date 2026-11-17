@@ -11,6 +11,7 @@ Kaynak: Forza Support, *Forza Horizon 6 "Data Out" Documentation* —
 - Alan sırası ve tipleri (S/U/F + bit) listelenir; **offset verilmez.**
 - Veri yalnız aktif sürüşte gönderilir; menü, pause, replay, rewind ve yarış bitişinden sonra gönderilmez.
 - FM'den farklı olarak `NumCylinders` ile `PositionX` arasına `CarGroup` (U32), `SmashableVelDiff` (F32, m/s), `SmashableMass` (F32, kg) eklenmiştir; `TireWear` ve `TrackOrdinal` yoktur.
+- `Fuel` alanı ham paket ve API uyumluluğu için korunur. Pitwall arayüzü bu alanı sürüş ölçümü olarak kullanmaz.
 - Birimler: hız m/s, güç W, tork N·m, boost "PSI above atmospheric", konum m (world), ivme/hız car-local (X sağ, Y yukarı, Z ileri), açısal hız rad/s, yön rad, yakıt 0–1, süspansiyon 0 = tam uzama / 1 = tam sıkışma, slip değerlerinde |x| > 1 tutuş kaybı, tur süreleri s ve "0.0 if not applicable", `TimestampMS` "can overflow to 0 eventually".
 - Aralıklar: `CarClass` 0 (D) … 7 (X), `CarPerformanceIndex` 100–999, `DrivetrainType` 0 FWD / 1 RWD / 2 AWD, `Steer` −127 tam sol … 127 tam sağ, `NormalizedDrivingLine` / `NormalizedAIBrakeDifference` −127…127, pedallar 0–255.
 

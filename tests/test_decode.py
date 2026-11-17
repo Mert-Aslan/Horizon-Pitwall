@@ -144,7 +144,7 @@ def test_inputs_are_fractions():
 
 
 def test_gear_codes_from_real_observation_are_labelled_as_observations():
-    # P-3, real session 16 Nov 2026: 0 while reversing, 11 between gears during shifts.
+    # Observed gear codes: 0 in reverse, 11 during shifts.
     _, n, _, _ = full(packet(Gear=0))
     assert n["gear"]["raw"] == 0 and n["gear"]["label"] == "R"
     assert "observed" in n["gear"]["note"] and n["gear"]["verified"] is False

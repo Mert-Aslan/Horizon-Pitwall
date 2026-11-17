@@ -1,30 +1,7 @@
-r"""Manual session recorder.
+"""Manual recording state and background writer.
 
-State machine (server-side truth; the UI only mirrors it)::
-
-    idle -> starting -> recording -> stopping -> completed
-                    \-> failed           \-> failed
-
-A new recording can be started from idle, completed or failed. ``start`` while a
-recording is active and ``stop`` while none is active raise ``RecorderBusy`` /
-``RecorderIdle`` (HTTP 409); the outcome is therefore deterministic for double clicks and
-two clients. The recorder does not depend on any browser: closing the UI does not stop
-a recording.
-
-Data path: the hub calls ``offer`` / ``on_event`` under its lock; they only do a
-``put_nowait`` into a bounded queue (overflow -> ``dropped`` counter). One writer thread
-owns the SQLite connection and the chunk files; no compression or SQL happens on the
-ingest path.
-
-Chunk commit order: write ``chunk-N.jsonl.gz.partial`` -> close + fsync -> rename to
-``chunk-N.jsonl.gz`` -> insert the chunk row and update counters in one transaction.
-The filesystem and the database are not one transaction; ``reconcile`` (run at startup)
-handles every crash point:
-  * partial file, no row        -> complete lines are recovered into a final chunk
-  * final file, no row          -> verified and registered
-  * row, file missing           -> chunk marked ``missing``
-  * recording still 'recording' -> becomes ``recovered`` (data kept) or ``incomplete``
-Recordings are never deleted automatically.
+Hub callbacks enqueue samples. The writer flushes and renames each chunk before committing its metadata.
+Startup reconciliation handles interrupted writes. See docs/STORAGE_FORMAT.md.
 """
 
 from __future__ import annotations

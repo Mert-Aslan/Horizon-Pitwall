@@ -36,13 +36,7 @@ from ..telemetry.synth import DEMO_CAR_ORDINAL, DemoGenerator
 
 log = logging.getLogger("pitwall.api")
 
-# Application-level flow control for the UI stream. OS socket buffers can hold several MB,
-# so a slow reader (weak Wi-Fi, busy phone) would otherwise see data tens of seconds old
-# while the server believes every send succeeded. A client that opts in acknowledges
-# every FLOW_ACK_EVERY messages; at most FLOW_WINDOW messages may be unacknowledged
-# (0.2 s at 30 Hz); a slow reader therefore sees at most about window / its own read
-# rate of backlog (measured: 1.3 s at 5 msg/s instead of 30-50 s without it). While
-# the window is full, frames are withheld (latest wins).
+# The acknowledgement window bounds backlog for slow clients.
 FLOW_WINDOW = 6
 REPLAY_MAX_WINDOW_S = 60.0
 REPLAY_MAX_ROWS = 8000
@@ -460,7 +454,7 @@ def create_app(
             "rows": rows,
         }
 
-    # ------------------------------------------------------- Telemetry Lab (M4)
+    # ------------------------------------------------------- Telemetry Lab
     lab_cache = lab.LabCache()
 
     def lab_columns(rec_id: str) -> tuple[dict, lab.Columns]:
@@ -544,7 +538,7 @@ def create_app(
         return StreamingResponse(lab.export_rows(col, ids, a, b), media_type="text/csv; charset=utf-8",
                                  headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
-    # ------------------------------------------------------- performance runs (M5)
+    # ------------------------------------------------------- performance runs
     def runs_for(rec: dict) -> list[dict]:
         store = need_recorder().store
         cached = store.cached_runs(rec["id"], perf.DETECTOR_VERSION, rec["samples"])
@@ -596,7 +590,7 @@ def create_app(
         return {"run": r, "t": [round(col.el[k] - r["t_start"], 4) for k in range(lo, hi)],
                 **{c: [nan_none(a[k]) for k in range(lo, hi)] for c, a in ch.items()}}
 
-    # ------------------------------------------------------- car names (M6)
+    # ------------------------------------------------------- car names
     def need_catalog() -> CarCatalog:
         if catalog is None:
             raise HTTPException(503, "the car catalog is not available in this instance")

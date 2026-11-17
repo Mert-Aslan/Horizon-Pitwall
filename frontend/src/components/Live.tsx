@@ -121,7 +121,7 @@ function Inputs({ frame, compactAux }: { frame: Frame | null; compactAux?: boole
           <span>Left</span>
           <span>Right</span>
         </div>
-        {outOfRange && <p className="note">Raw steer is outside the documented −127…127 range ({frame?.quality.fields["Steer"]?.detail ?? "raw value"}); shown clamped.</p>}
+        {outOfRange && <p className="note">Steering input is out of range. Display limited to ±100%.</p>}
       </div>
       {!expanded && !compactAux && (
         <div className="aux-inputs">
@@ -199,11 +199,8 @@ function Chassis({ frame, compact }: { frame: Frame | null; compact?: boolean })
           Tyres
         </h2>
         <details className="info">
-          <summary>About these values</summary>
-          <p>
-            Temperature is shown exactly as the game sends it: the game does not document the unit, so no Celsius or Fahrenheit conversion is made. Slip bars run from 0 to 2; the mark is
-            1.0, above which the game reports loss of grip. Suspension is compression, 0 % fully extended to 100 % fully compressed.
-          </p>
+          <summary>Temperature units</summary>
+          <p>Raw tyre temperature. Forza does not specify a unit.</p>
         </details>
       </div>
       {compact ? (
@@ -264,10 +261,8 @@ function OutputAndTiming({ frame, perf }: { frame: Frame | null; perf?: PerfStat
         <Readout label="Power" value={fmt(frame?.derived.power_kw)} unit="kW" sub={isNum(frame?.derived.power_hp) ? `${fmt(frame?.derived.power_hp)} hp` : undefined} />
         <Readout label="Torque" value={fmt(n?.torque_nm)} unit="N·m" />
         <Readout label="Boost" value={fmt(n?.boost_psi, 1)} unit="psi" />
-        <Readout label="Fuel" value={fmtPct(n?.fuel_fraction)} />
       </dl>
       <h2 className="panel-title timing-title">Timing</h2>
-      {!hasTiming && <p className="muted small">No lap timing in this session: the game reports lap times as 0.0 when they do not apply.</p>}
       <dl className="kv">
         {rows.map(([k, v]) => (
           <div key={k}>
@@ -276,9 +271,6 @@ function OutputAndTiming({ frame, perf }: { frame: Frame | null; perf?: PerfStat
           </div>
         ))}
       </dl>
-      <p className="muted small race-flag">
-        Game race flag (IsRaceOn): {n?.race_on === null || n?.race_on === undefined ? "unknown" : n.race_on ? "1" : "0"}
-      </p>
       {perf !== undefined && <PerfRun perf={perf} />}
     </section>
   );
@@ -294,7 +286,7 @@ function EmptyState({ snap, view }: { snap: Snapshot; view: ViewState }) {
         <p className="error-text">{snap.status?.receiver_error}</p>
         <ul>
           <li>
-            Another program (or a second Pitwall) may already use this port. Close it, or start Pitwall with <code>--udp-port</code> and set the same port in the game.
+            If the port is in use, close the other program or set a different <code>--udp-port</code> in Pitwall and match it in Forza.
           </li>
           <li>Avoid ports 5200–5300; the game uses them for its own socket.</li>
         </ul>
@@ -306,7 +298,7 @@ function EmptyState({ snap, view }: { snap: Snapshot; view: ViewState }) {
     return (
       <section className="empty panel" aria-labelledby="empty-title">
         <h1 id="empty-title">Connecting to the Pitwall server…</h1>
-        <p>If this does not change, make sure Pitwall is still running in its terminal window.</p>
+        <p>Check that Pitwall is running.</p>
       </section>
     );
   }
@@ -314,14 +306,14 @@ function EmptyState({ snap, view }: { snap: Snapshot; view: ViewState }) {
     <section className="empty panel" aria-labelledby="empty-title">
       <h1 id="empty-title">Waiting for telemetry</h1>
       <p>
-        Listening on UDP <span className="num">{addr}</span>. Nothing has been received yet, so no values are shown.
+        Listening on UDP <span className="num">{addr}</span>.
       </p>
       <ol>
         <li>In Forza Horizon 6 open Settings › HUD and Gameplay.</li>
         <li>
           Set Data Out to On, Data Out IP Address to <code>{ip}</code> and Data Out IP Port to <code>{port}</code>.
         </li>
-        <li>Start driving. The game sends data only while you drive, not in menus.</li>
+        <li>Return to the game and start driving.</li>
       </ol>
       <DemoButton enable label="Explore with demo data" />
     </section>

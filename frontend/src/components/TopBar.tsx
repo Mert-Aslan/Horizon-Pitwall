@@ -24,9 +24,7 @@ interface Props {
   carNames?: Map<number, CarName>;
 }
 
-/** What to call the car. The raw CarOrdinal is never altered; the server's identity
- *  tracker says whether the id is confirmed, still being checked or currently not sent
- *  (the game sends 0 for short periods, finding D-2). */
+/** Car name and identity status. */
 export function carIdentityText(snap: Snapshot, demoOrdinal: number | null, names?: Map<number, CarName>): { name: string; tag: string; title: string } | null {
   const f = snap.frame;
   if (!f) return null;
@@ -37,24 +35,24 @@ export function carIdentityText(snap: Snapshot, demoOrdinal: number | null, name
   switch (ci.status) {
     case "confirmed": {
       if (ci.confirmed_ordinal !== null && ci.confirmed_ordinal < 0) {
-        return { name: `Car #${ci.confirmed_ordinal}`, tag: "synthetic id", title: "Negative car ids come from Pitwall's own test data, never from the game" };
+        return { name: `Car #${ci.confirmed_ordinal}`, tag: "synthetic id", title: "Synthetic car ID" };
       }
       const n = ci.confirmed_ordinal !== null ? names?.get(ci.confirmed_ordinal) : undefined;
-      if (n) return { name: carDisplayName(n), tag: provenance(n), title: `CarOrdinal ${ci.confirmed_ordinal}; name from the Garage (${provenance(n)})` };
-      return { name: `Car #${ci.confirmed_ordinal}`, tag: "name not known yet", title: `CarOrdinal ${ci.confirmed_ordinal}: no name yet. Give it one in the Garage.` };
+      if (n) return { name: carDisplayName(n), tag: provenance(n), title: `Garage car #${ci.confirmed_ordinal}` };
+      return { name: `Car #${ci.confirmed_ordinal}`, tag: "", title: "Set a name in Garage" };
     }
     case "temporarily_unavailable":
       return {
         name: `Car #${ci.confirmed_ordinal}`,
-        tag: "id not sent right now",
-        title: `The game is currently sending CarOrdinal ${fmt(raw)}; showing the last confirmed id ${ci.confirmed_ordinal}, not live-verified`,
+        tag: "last seen",
+        title: "Car ID temporarily unavailable",
       };
     case "candidate":
       return { name: `Car #${ci.candidate_ordinal}`, tag: "checking id", title: "A new CarOrdinal is being confirmed" };
     case "unavailable":
-      return { name: "No car id", tag: "not sent", title: `The game has not sent a car id for a while (last confirmed: ${ci.confirmed_ordinal ?? "none"})` };
+      return { name: "No car ID", tag: "", title: "Car ID unavailable" };
     default:
-      return { name: "Car not identified yet", tag: "waiting for id", title: `CarOrdinal ${fmt(raw)}` };
+      return { name: "Waiting for car ID", tag: "", title: `CarOrdinal ${fmt(raw)}` };
   }
 }
 
@@ -65,7 +63,7 @@ export function CarIdentity({ snap, demoOrdinal, names }: { snap: Snapshot; demo
   return (
     <span className="car-id" title={id.title}>
       <span className="car-name">{id.name}</span>
-      <span className="tag tag-neutral">{id.tag}</span>
+      {id.tag && <span className="tag tag-neutral">{id.tag}</span>}
       <span className="car-meta">
         <span>
           <span className="meta-k">Class</span> {car.class_label ?? (isNum(car.class_code) ? car.class_code : "—")}
@@ -89,8 +87,7 @@ export function clock(seconds: number | null | undefined): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 }
 
-/** Record / stop. The button mirrors the server's recorder state from the stream; a click
- *  never marks itself as recording, it waits for the server to say so. */
+/** Record control driven by the server state. */
 function RecordControl({ snap }: { snap: Snapshot }) {
   const rec = snap.status?.recorder ?? null;
   const [pending, setPending] = useState(false);
@@ -116,7 +113,7 @@ function RecordControl({ snap }: { snap: Snapshot }) {
         onClick={() => void click()}
         disabled={pending || rec.state === "stopping" || rec.state === "starting"}
         aria-pressed={active}
-        title={active ? "Stop and save the recording" : `Record ${snap.status?.mode === "demo" ? "the demo stream (labelled as demo)" : "the live stream"} to this PC`}
+        title={active ? "Stop and save the recording" : `Record ${snap.status?.mode === "demo" ? "demo data" : "live telemetry"}`}
       >
         <span className="rec-dot" aria-hidden="true" />
         {rec.state === "stopping" ? "Saving…" : active ? "Stop" : "Record"}
@@ -164,7 +161,7 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
         ))}
       </nav>
       <div className="topbar-car">
-        {replay ? <span className="car-id muted">{overlay === "lab" ? "Analysing a recording" : "Replaying a recording"}</span> : <CarIdentity snap={snap} demoOrdinal={demoOrdinal} names={carNames} />}
+        {!replay && <CarIdentity snap={snap} demoOrdinal={demoOrdinal} names={carNames} />}
       </div>
       <div className="topbar-status">
         <RecordControl snap={snap} />
@@ -174,7 +171,7 @@ export function TopBar({ snap, view, tab, onTab, focus, onFocus, demoOrdinal, re
           </button>
         )}
         {view.demo && <span className="mode-badge">Demo</span>}
-        <span className={`conn conn-${view.kind}`} role="status" aria-live="polite" title={replay ? "State of the live link (the replay does not change it)" : undefined}>
+        <span className={`conn conn-${view.kind}`} role="status" aria-live="polite" title={replay ? "Live telemetry status" : undefined}>
           <span className="conn-mark" aria-hidden="true" />
           {replay ? `Live: ${view.label}` : view.label}
         </span>

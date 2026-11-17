@@ -4,8 +4,7 @@ import type { Snapshot } from "../stream";
 import { DemoButton } from "./DemoButton";
 import type { ViewState } from "../viewstate";
 
-/** Re-render once a second while the server is unreachable so the retry countdown moves
- *  (no messages arrive to trigger renders in that state). */
+/** Updates the reconnect countdown while offline. */
 function useTick(active: boolean): void {
   const [, set] = useState(0);
   useEffect(() => {
@@ -15,18 +14,15 @@ function useTick(active: boolean): void {
   }, [active]);
 }
 
-/** During a replay only banners about the server link and the recorder are shown; the
- *  live data-state banners (demo, stale, no driving data, senders) describe the live
- *  stream, not what is on screen. */
 export function Banners({ snap, view, replay = false }: { snap: Snapshot; view: ViewState; replay?: boolean }) {
   useTick(view.kind === "server_offline");
   const items: { tone: "info" | "warn" | "danger" | "demo"; text: string; action?: ReactNode }[] = [];
   if (snap.versionMismatch) {
-    items.push({ tone: "danger", text: "This page and the Pitwall server are different versions. Reload the page." });
+    items.push({ tone: "danger", text: "Incompatible Pitwall version. Reload the page." });
   } else if (snap.uiBuildMismatch) {
     items.push({
       tone: "info",
-      text: "The Pitwall server now serves a newer version of this page.",
+      text: "Pitwall has been updated.",
       action: (
         <button type="button" className="btn btn-small" onClick={() => location.reload()}>
           Reload page
@@ -35,43 +31,43 @@ export function Banners({ snap, view, replay = false }: { snap: Snapshot; view: 
     });
   }
   if (snap.protocolError) {
-    items.push({ tone: "danger", text: `${snap.protocolError} Values may be out of date; reloading the page usually fixes a version mix-up.` });
+    items.push({ tone: "danger", text: "Could not read telemetry from the server. Reload the page." });
   }
   const rec = snap.status?.recorder;
   if (rec?.state === "failed" && rec.error) {
-    items.push({ tone: "danger", text: `Recording stopped: ${rec.error}. Live view keeps working; the part saved so far is in Sessions.` });
+    items.push({ tone: "danger", text: `Recording stopped: ${rec.error}. Check Sessions for saved data.` });
   }
   if (view.demo && !replay) {
     items.push({
       tone: "demo",
-      text: "Demo mode: synthetic data, not a real drive. Live UDP packets are ignored while demo is on.",
+      text: "Live telemetry is paused during the demo.",
       action: <DemoButton enable={false} label="Stop demo" quiet />,
     });
   }
   if (view.kind === "server_offline" && snap.lastMessageAt !== null) {
     const secs = snap.retryAt ? Math.max(0, Math.round((snap.retryAt - performance.now()) / 1000)) : null;
-    items.push({ tone: "danger", text: `Lost connection to the Pitwall server${secs !== null ? `; retrying in ${secs} s` : ""}. Values below are frozen.` });
+    items.push({ tone: "danger", text: secs !== null ? `Reconnecting in ${secs} s…` : "Reconnecting…" });
   }
   if (view.kind === "no_data" && !replay) {
     items.push({
       tone: "warn",
-      text: `The game is sending packets without driving data (IsRaceOn = 0, every value zero).${view.hasFrame ? " Last driving values shown dimmed." : ""} Data returns when you are driving again.`,
+      text: `Packets without driving data${view.hasFrame ? ". Showing the last driving values." : ". Start driving to see telemetry."}`,
     });
   }
   if (view.kind === "stale" && view.hasFrame && !replay) {
     items.push({
       tone: "warn",
-      text: `No new packets for ${ageText(snap.status?.packet_age_ms)}. Last values shown dimmed. The game pauses Data Out in menus, pause, rewind, replays and after a race.`,
+      text: `No new packets for ${ageText(snap.status?.packet_age_ms)}. Showing the last values.`,
     });
   }
   if (view.warning === "invalid_packets" && !replay) {
     items.push({
       tone: "danger",
-      text: `Packets are arriving but do not match the FH6 format (${snap.status?.last_rejected_reason ?? "invalid"}). Check that the sender is Forza Horizon 6. Details in Diagnostics.`,
+      text: "Unexpected packet format. Check that Forza Horizon 6 is the sender. See Diagnostics for details.",
     });
   }
   if (view.warning === "foreign_source" && !replay) {
-    items.push({ tone: "warn", text: "A second sender is transmitting to this port; it is ignored while the current one is active. See Diagnostics." });
+    items.push({ tone: "warn", text: "Packets from a second sender are being ignored. See Diagnostics." });
   }
   if (!items.length) return null;
   return (

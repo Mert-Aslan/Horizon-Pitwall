@@ -169,9 +169,9 @@ export function Replay({ id, liveSnap, focus, onClose, startAt = 0 }: { id: stri
     : state.loading && !state.frame
       ? "Loading this part of the recording…"
       : state.inGap
-        ? "No data was recorded at this moment (gap). Last recorded values shown dimmed."
+        ? "Gap in the recording. Showing the last values."
         : state.empty
-          ? "The game sent no driving data here (IsRaceOn = 0). Last driving values shown dimmed."
+          ? "No driving data at this point."
           : state.ended
             ? "End of the recording."
             : null;
@@ -183,7 +183,6 @@ export function Replay({ id, liveSnap, focus, onClose, startAt = 0 }: { id: stri
           <span className="mode-badge mode-replay">Replay</span>
           <strong>{detail?.title || (detail ? when(detail.started_utc) : "…")}</strong>
           {detail?.mode === "demo" && <span className="tag">demo recording</span>}
-          <span className="muted small">Recorded data, not live. Live data keeps arriving in the background.</span>
           <button type="button" className="btn btn-small btn-quiet replay-close" onClick={onClose}>
             Close replay
           </button>

@@ -30,7 +30,7 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 | F-08 metrik adları, sürüm, belge çelişkileri | kod/belge bulgusu | `ui_rate_limited_frames` ≠ kayıp; akış/recorder sayaç havuzları ayrı; tek sürüm; build kimliği; bu belge yeniden düzenlendi | `test_api_recording::test_build_identity`; Diagnostics |
 | WinError 10054 logu | kullanıcının logunda 1 kez (15:20:50) | yalnız tam bu durum tek satır INFO + sayaç; diğerleri varsayılan işleyicide | yeniden üretilemedi (0.2.0 ve 0.3.0 backend, 4 desen × 5); **tetikleyici açık** |
 
-**Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. Baseline commit `716cbc5` üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
+**Fail-first:** `tests/test_regressions_api_stable.py` yalnız 0.2.0'da da bulunan API'yi kullanır. 0.2.0 baseline commit'i (geçmişteki ilk commit) üzerinde (geçici git worktree) **6/6 başarısız**, 0.3.0'da **6/6 geçer**. F-01 için aynı backend'le iki UI bundle'ı gerçek Chromium'da karşılaştırıldı (yukarıdaki tablo). F-03'ün yeni testleri yeni test edilebilir arayüzü (enjekte edilen ortam) kullandığı için baseline'da çalıştırılamaz; o bulgunun "önce"si kod incelemesidir.
 
 ### 0.7.0 — M6 araç adları ve kurulum
 
@@ -53,7 +53,7 @@ Kanıt türleri ayrı tutulur: **kod bulgusu**, **deterministik test**, **gerçe
 
 Sessions → **Analyze** bir kaydı inceleme ekranında açar:
 
-- **Kanallar** (30): hız, devir, vites kodu, gaz/fren/debriyaj/el freni/direksiyon, güç/tork/boost/yakıt, yanal/boyuna/dikey ivme, yaw hızı, dört teker combined slip, süspansiyon, lastik sıcaklığı (ham, birim belgesiz), dünya X/Y/Z. Her kanalın birimi, notu ve "veri olan örnek" oranı görünür; en çok 6 kanal aynı anda çizilir, seçim tarayıcıda saklanır (bozuk depolamada varsayılana döner).
+- **Arayüzdeki kanallar**: hız, devir, vites kodu, gaz/fren/debriyaj/el freni/direksiyon, güç/tork/boost, yanal/boyuna/dikey ivme, yaw hızı, dört teker combined slip, süspansiyon, lastik sıcaklığı (ham, birim belgesiz), dünya X/Y/Z. Her kanalın birimi, notu ve "veri olan örnek" oranı görünür; en çok 6 kanal aynı anda çizilir, seçim tarayıcıda saklanır (bozuk depolamada varsayılana döner).
 - **Grafik:** kanal başına şerit, ortak zaman ekseni ve imleç (fare/klavye), sürükleyerek yakınlaştırma, "Zoom out" / "Whole recording", veri olmayan aralıklar renkli (kırmızımsı: örnek yok; amber: boş oyun paketi), olay ve not işaretleri. Çizim piksel sütunu başına **min–max zarfıdır** (tek örneklik tepe kaybolmaz; test edildi). İstatistik tablosu (min/ortalama/max/geçerli örnek) seyreltilmiş çizgiden değil, aralıktaki **tüm örneklerden** hesaplanır (tarayıcı testi: tablo max'ı = tam çözünürlük max'ı).
 - **Paneller:** seçili aralığın özeti (süre, veri olan süre, hızdan entegre mesafe, tepe/ortalama hız, tam gaz/fren/tutuş kaybı süreleri, tepe ivmeler, vites değişimi), G-G dağılımı (her n'inci örnek çizilir; tepe ve %95 tüm örneklerden), üstten rota (dünya X/Z, boşluk/boş paket/hızla açıklanamayan sıçramada kesilir), devir bandına göre güç (tam gaz, ileri vites, debriyaj ≤ %5, medyan; "dyno değildir").
 - **Olaylar:** kayıt sırasında hub'ın yazdıkları (`certain`) + sezgisel tespitler (`heuristic`, kuralıyla): 0.5 s'den uzun veri boşluğu, boş paket aralıkları, segment değişimi, gaz altında ≥ 0.5 s tutuş kaybı (en yüksek slip ve teker), olası "smashable" çarpması (`SmashableVelDiff` > 0.5 m/s). Her olaydan "Show" (aralığa yakınlaş) ve "Replay" (3 s önceden oynat).
@@ -160,7 +160,7 @@ Brief'teki M1–M6 kilometre taşları tamamlandı. Sıradaki en değerli iş **
 
 ## Sürüm kontrolü
 
-Proje klasöründe yerel bir git deposu oluşturuldu (uzak depo yok, hiçbir şey yayımlanmadı). `716cbc5` = 0.2.0 baseline (bu turun geri dönüş noktası). `legacy/forza_horizon_6_telemetry.original.py` ilk prototiptir; 0.2.x'in geri dönüş noktası değildir.
+Kod git ile sürümlenir; geçmişteki ilk commit 0.2.0 baseline'ıdır ve sonraki her sürüm bir commit'tir. Depo: <https://github.com/Mert-Aslan/Horizon-Pitwall>.
 
 ---
 
@@ -172,7 +172,7 @@ Aşağıdaki sayılar 0.2.0 dönemine aittir ve olduğu gibi korunmuştur; günc
 
 | Faz | Durum | Not |
 |---|---|---|
-| 0 — Baseline | ✅ | Orijinal dosya `legacy/` altında byte-identik (SHA-256 `f9e5cbf7…388a7`); `tools/legacy_baseline.py`; `docs/screenshots/00-legacy-baseline-1920.png`. |
+| 0 — Baseline | ✅ | İlk tek dosyalık prototipin davranışı incelendi ve sorunları kayda geçirildi (aşağıdaki tablo); prototip artık depoda tutulmuyor. |
 | 1 — Veri doğruluğu | ✅ | Modüler decoder/normalizer, alan kalitesi, sıra/kaynak politikası, sunucu tarafı durum makinesi, görünür bind hatası, yapılandırma, temiz kapanış. |
 | 2 — Live ürün | ✅ | React/TS/Vite arayüzü, WebSocket akışı, bağlantı durumları, etiketli demo, Diagnostics + ham inspector, responsive. |
 
