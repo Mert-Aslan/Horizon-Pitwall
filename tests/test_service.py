@@ -60,7 +60,7 @@ def test_copy_release_requires_release_and_replaces_only_own_install(tmp_path):
     src.mkdir()
     with pytest.raises(manage.ServiceError):
         manage.copy_release(src, tmp_path / "pf" / "Horizon Pitwall")
-    (src / manage.SERVICE_EXE).write_text("exe")
+    (src / manage.APP_EXE).write_text("exe")
     (src / "_internal").mkdir()
     (src / "_internal" / "lib.dll").write_text("dll")
     target = tmp_path / "pf" / "Horizon Pitwall"
@@ -72,7 +72,7 @@ def test_copy_release_requires_release_and_replaces_only_own_install(tmp_path):
     (target / "foreign.txt").unlink()
     target.rmdir()
     manage.copy_release(src, target)
-    assert (target / manage.SERVICE_EXE).exists() and (target / manage.INSTALL_MARKER).exists()
+    assert (target / manage.APP_EXE).exists() and (target / manage.INSTALL_MARKER).exists()
     (src / "_internal" / "lib.dll").write_text("v2")
     manage.copy_release(src, target)  # upgrade in place
     assert (target / "_internal" / "lib.dll").read_text() == "v2"

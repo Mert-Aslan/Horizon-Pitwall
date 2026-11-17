@@ -15,7 +15,8 @@ commands below.
 3. creates `%ProgramData%\HorizonPitwall` with these permissions only: SYSTEM and
    Administrators full control, the service account (LOCAL SERVICE) modify. Ordinary users
    cannot read or change the service's recordings or settings;
-4. registers the service **HorizonPitwall** ("Horizon Pitwall"), automatic start, running as
+4. registers the service **HorizonPitwall** ("Horizon Pitwall"), which runs the same
+   `HorizonPitwall.exe` with the internal option `--service-host`; automatic start, running as
    `NT AUTHORITY\LocalService` (no administrator rights, no network credentials);
 5. sets bounded recovery: restart after 10 s, then after 60 s, then stay stopped; the
    failure count resets after a day;

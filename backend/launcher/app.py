@@ -287,6 +287,10 @@ def _exit_running(data: Path) -> int:
 
 def main(argv: Optional[list[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["--service-host"]:  # started by the Service Control Manager
+        from ..service import svc
+
+        return svc.main()
     _fix_stdio()
     if argv and argv[0] == "service":
         from ..service import manage

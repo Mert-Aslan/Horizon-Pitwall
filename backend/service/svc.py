@@ -1,5 +1,5 @@
-"""Windows Service host (HorizonPitwallService.exe), started only by the Service Control
-Manager after an explicit ``HorizonPitwall.exe service install``.
+"""Windows Service host (``HorizonPitwall.exe --service-host``), started only by the
+Service Control Manager after an explicit ``HorizonPitwall.exe service install``.
 
 The body is ``run_body`` so it can be exercised without the SCM. Startup is reported
 as START_PENDING until the server answers its own health check, then RUNNING. A worker
@@ -101,12 +101,19 @@ def _service_class():
 
 
 def main() -> int:
+    import pywintypes
     import servicemanager
 
-    if len(sys.argv) > 1:
-        print("HorizonPitwallService.exe is started by Windows. Use: HorizonPitwall.exe service install|start|stop|status|uninstall")
-        return 2
     servicemanager.Initialize()
     servicemanager.PrepareToHostSingle(_service_class())
-    servicemanager.StartServiceCtrlDispatcher()
+    try:
+        servicemanager.StartServiceCtrlDispatcher()
+    except pywintypes.error as e:
+        if e.winerror != 1063:  # ERROR_FAILED_SERVICE_CONTROLLER_CONNECT: not started by the SCM
+            raise
+        from ..launcher import winapi
+
+        winapi.message_box("This option is used by Windows to run the Horizon Pitwall service.\n\n"
+                           "Start HorizonPitwall.exe without options, or use: HorizonPitwall.exe service install", kind="info")
+        return 2
     return 0

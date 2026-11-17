@@ -29,9 +29,12 @@ def main() -> int:
 3. Open the extracted folder and double-click `HorizonPitwall.exe`. The dashboard opens in your browser.
 4. In Forza Horizon 6: Settings > HUD and Gameplay > Data Out **On**, IP `127.0.0.1`, port `5607`.
 
-No Python or Node.js is needed. The executable is not code-signed, so Windows SmartScreen may
-ask for confirmation the first time (More info > Run anyway). Check the download against the
-SHA-256 below if in doubt.
+No Python or Node.js is needed.
+
+**"Windows protected your PC"** is Microsoft Defender SmartScreen, not a virus detection: the
+executable is not code-signed yet, and SmartScreen warns about unsigned programs that have not
+been downloaded widely. Choose **More info > Run anyway**, or right-click the ZIP >
+**Properties** > **Unblock** before extracting. Compare the download with the SHA-256 below.
 
 Full guide: [docs/INSTALL.md](https://github.com/Mert-Aslan/Horizon-Pitwall/blob/v{APP_VERSION}/docs/INSTALL.md)
 

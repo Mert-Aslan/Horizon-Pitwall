@@ -78,7 +78,7 @@ def main() -> int:
         if not ok:
             diagnostics(pd)
             raise SystemExit(1)
-        check("installed under Program Files with marker", lambda: (pf / manage.SERVICE_EXE).exists() and (pf / manage.INSTALL_MARKER).exists() or _fail(pf))
+        check("installed under Program Files with marker", lambda: (pf / manage.APP_EXE).exists() and (pf / manage.INSTALL_MARKER).exists() or _fail(pf))
 
         def identity():
             b = Http(url).json("GET", "/api/v1/build")

@@ -42,11 +42,11 @@ BUILD_INFO = ROOT / "backend" / "_build_info.json"
 VERSION_INFO = ROOT / "packaging" / "version_info.txt"
 
 REQUIRED = [
-    "HorizonPitwall.exe", "HorizonPitwallService.exe", "README.txt", "LICENSE.txt", "THIRD_PARTY_NOTICES.txt",
+    "HorizonPitwall.exe", "README.txt", "LICENSE.txt", "THIRD_PARTY_NOTICES.txt",
     "pitwall.config.example.json", "_internal/frontend/dist/index.html", "_internal/frontend/dist/build-manifest.json",
     "_internal/backend/_build_info.json", "_internal/packaging/HorizonPitwall.ico",
 ]
-TOP_ALLOWED = {"HorizonPitwall.exe", "HorizonPitwallService.exe", "_internal", "README.txt", "LICENSE.txt",
+TOP_ALLOWED = {"HorizonPitwall.exe", "_internal", "README.txt", "LICENSE.txt",
                "THIRD_PARTY_NOTICES.txt", "pitwall.config.example.json"}
 # Never shipped: VCS/dependency/cache folders, project tests and tools, user data, secrets.
 FORBIDDEN_ANYWHERE = {".git", "node_modules", ".venv", ".venv-build", ".claude", "__pycache__", ".pytest_cache"}

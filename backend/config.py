@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 APP_NAME = "Horizon Pitwall"
-APP_VERSION = "0.8.0"
+APP_VERSION = "0.8.1"
 GAME_RESERVED_PORTS = range(5200, 5301)  # the game binds its own socket in this range
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 EQUAL_TIMESTAMP_POLICIES = ("reject", "accept_changed")

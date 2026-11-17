@@ -53,10 +53,27 @@ again.
 ## What is in a release
 
 - `HorizonPitwall-X.Y.Z-windows-x64.zip`: one folder `HorizonPitwall-X.Y.Z/` with
-  `HorizonPitwall.exe`, `HorizonPitwallService.exe`, `_internal/`, `README.txt`,
+  `HorizonPitwall.exe`, `_internal/`, `README.txt`,
   `LICENSE.txt`, `THIRD_PARTY_NOTICES.txt`, `pitwall.config.example.json`
 - `HorizonPitwall-X.Y.Z-release-manifest.json`: build metadata and every file's SHA-256
 - `SHA256SUMS.txt`: checksums of the two files above
 
-The executables are not code-signed. Signing would need a certificate and a secret in the
-repository; until then the release notes explain the SmartScreen prompt and the checksums.
+## Code signing and SmartScreen
+
+The executable is not code-signed. Downloaded unsigned programs get the SmartScreen prompt
+"Windows protected your PC" until the file has a download reputation; a Defender scan
+(`MpCmdRun.exe -Scan -ScanType 3 -File <folder>`) of the package finds nothing.
+
+Signing reduces this but does not remove it at once: since 2024 EV certificates no longer
+bypass SmartScreen, and reputation builds per publisher and file over time. Options:
+
+| Option | Cost | Notes |
+|---|---|---|
+| SignPath Foundation (signpath.org) | free for OSI-licensed open-source projects | certificate issued to "SignPath Foundation"; needs an application, a code signing policy page and their GitHub Actions integration |
+| Commercial OV certificate (Sectigo, Certum, SSL.com, …) | paid, yearly | identity validation of the maintainer; private key in a hardware token or a cloud HSM |
+| Azure Artifact Signing | monthly fee | individuals only in the USA and Canada |
+
+Whichever is chosen, the signing step belongs in `release.yml` after `build_exe.py` and
+before the ZIP is created (sign `HorizonPitwall.exe`), with the credentials in repository
+secrets. Until then the README, INSTALL guide and release notes explain the prompt, the
+**Unblock** option and the checksums.
