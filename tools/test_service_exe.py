@@ -74,7 +74,10 @@ def main() -> int:
         return subprocess.run([exe, "service", *args], env={**os.environ, **env}, timeout=180).returncode
 
     try:
-        check("service install (copies to Program Files, starts)", lambda: (svc("install") == 0 and manage.state() == "running") or _fail(manage.state()))
+        ok = check("service install (copies to Program Files, starts)", lambda: (svc("install") == 0 and manage.state() == "running") or _fail(manage.state()))
+        if not ok:
+            diagnostics(pd)
+            raise SystemExit(1)
         check("installed under Program Files with marker", lambda: (pf / manage.SERVICE_EXE).exists() and (pf / manage.INSTALL_MARKER).exists() or _fail(pf))
 
         def identity():
@@ -113,9 +116,19 @@ def main() -> int:
         def launcher_defers():
             import os
 
-            r = subprocess.run([exe, "--background"], env={**os.environ, **env}, timeout=60)
-            assert r.returncode == 0
-            assert not (Path(os.environ["LOCALAPPDATA"]) / "HorizonPitwall" / "run" / "instance.json").exists()
+            # Isolated user data folder whose settings use the service's ports: if the service
+            # were not detected, the launcher would hit busy ports instead of serving 8080/5607.
+            local = tmp / "user local appdata"
+            (local / "HorizonPitwall").mkdir(parents=True)
+            (local / "HorizonPitwall" / "pitwall.config.json").write_text(json.dumps({"web_port": web, "udp_port": udp}), encoding="utf-8")
+            p = subprocess.Popen([exe, "--background"], env={**os.environ, **env, "LOCALAPPDATA": str(local)})
+            try:
+                code = p.wait(60)
+            finally:
+                if p.poll() is None:
+                    p.kill()
+            assert code == 0, code
+            assert not (local / "HorizonPitwall" / "run" / "instance.json").exists()
             return None
 
         check("tray launcher uses the running service instead of a second receiver", launcher_defers)
@@ -126,6 +139,8 @@ def main() -> int:
         check("service uninstall keeps data", lambda: svc("uninstall") == 0 and manage.state() is None and not pf.exists()
               and (pd / "data").exists() or _fail((manage.state(), pf.exists())))
     finally:
+        if any(not r["ok"] for r in results):
+            diagnostics(pd)
         if manage.state() is not None:
             svc("uninstall")
         if pf.exists() and (pf / manage.INSTALL_MARKER).exists():
@@ -137,6 +152,30 @@ def main() -> int:
     print(f"\n{len(results) - len(failed)} passed, {len(failed)} failed")
     Path(a.zip).with_name("service-test-report.json").write_text(json.dumps(results, indent=1) + "\n", encoding="utf-8")
     return 1 if failed else 0
+
+
+_dumped = False
+
+
+def diagnostics(pd: Path) -> None:
+    """Print what the service left behind, for CI logs."""
+    global _dumped
+    if _dumped:
+        return
+    _dumped = True
+    print("\n==== diagnostics ====", flush=True)
+    for cmd in (["sc", "qc", manage.SERVICE_NAME], ["sc", "queryex", manage.SERVICE_NAME]):
+        print(subprocess.run(cmd, capture_output=True, text=True).stdout, flush=True)
+    for f in sorted((pd / "data" / "logs").glob("*")) if (pd / "data" / "logs").exists() else []:
+        print(f"---- {f}", flush=True)
+        print(f.read_text(encoding="utf-8", errors="replace")[-6000:], flush=True)
+    ps = ("Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Service Control Manager'; StartTime=(Get-Date).AddMinutes(-15)} "
+          "-MaxEvents 15 -ErrorAction SilentlyContinue | Format-List TimeCreated,Id,Message; "
+          "Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-15)} -MaxEvents 30 "
+          "-ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Python|Pitwall|Application Error|Windows Error' } "
+          "| Format-List TimeCreated,ProviderName,Id,Message")
+    print(subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True).stdout[-12000:], flush=True)
+    print("==== end diagnostics ====", flush=True)
 
 
 def _fail(detail):

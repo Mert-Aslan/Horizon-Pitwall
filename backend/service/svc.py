@@ -50,6 +50,17 @@ def run_body(stop: threading.Event, report_running: Callable[[], None], root: Op
     return 0
 
 
+def _bootstrap_log(text: str) -> None:
+    """Last-resort log when the configured log cannot be opened yet."""
+    try:
+        d = manage.program_data_root() / "data" / "logs"
+        d.mkdir(parents=True, exist_ok=True)
+        with (d / "service-error.log").open("a", encoding="utf-8") as f:
+            f.write(text.rstrip() + "\n")
+    except OSError:
+        pass
+
+
 def _service_class():
     import servicemanager
     import win32service
@@ -70,7 +81,16 @@ def _service_class():
 
         def SvcRun(self) -> None:  # noqa: N802
             self.ReportServiceStatus(win32service.SERVICE_START_PENDING, waitHint=60_000)
-            code = run_body(self.stop_event, lambda: self.ReportServiceStatus(win32service.SERVICE_RUNNING))
+            try:
+                code = run_body(self.stop_event, lambda: self.ReportServiceStatus(win32service.SERVICE_RUNNING))
+            except BaseException:  # noqa: BLE001 - must reach a log before the process ends
+                import traceback
+
+                text = traceback.format_exc()
+                log.error("event=service_crashed\n%s", text)
+                _bootstrap_log(text)
+                servicemanager.LogErrorMsg(f"Horizon Pitwall service failed to start:\n{text[-1500:]}")
+                code = 6
             if code != 0:
                 servicemanager.LogErrorMsg(f"Horizon Pitwall stopped with error {code}; see the service log.")
                 logging.shutdown()
